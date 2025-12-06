@@ -1368,7 +1368,7 @@ export default function KonvaCanvas({
         const existingNode = nodeMap.get(shape.id);
         
         // Check if node is still valid
-        const nodeIsValid = existingNode && existingNode.getLayer() && !existingNode.isDestroying();
+        const nodeIsValid = existingNode && existingNode.getLayer();
         
         if (nodeIsValid) {
           // Node exists - just update its properties
@@ -1592,7 +1592,7 @@ export default function KonvaCanvas({
                   try {
                       // Try node map first (faster), fallback to findOne
                       let node = nodeMap.get(id);
-                      if (!node || node.isDestroying() || !node.getLayer()) {
+                      if (!node || !node.getLayer()) {
                           // Node is stale or destroyed, try finding it again
                           node = layerRef.current?.findOne(`#${id}`);
                           
@@ -1759,7 +1759,7 @@ export default function KonvaCanvas({
         }
       }
 
-      transformer.moveToTop();
+      transformerRef.current?.moveToTop();
       gradientGroupRef.current?.moveToTop();
       layerRef.current.batchDraw();
   }, [selectedIds, shapes, visibleShapes, activeTool]);
