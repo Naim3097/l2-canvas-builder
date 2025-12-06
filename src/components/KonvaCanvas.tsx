@@ -86,6 +86,10 @@ export default function KonvaCanvas({
   const layerRef = useRef<Konva.Layer | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const gradientGroupRef = useRef<Konva.Group | null>(null);
+  
+  // Node reconciliation map: shapeId -> Konva.Node
+  const nodeMapRef = useRef<Map<string, Konva.Node>>(new Map());
+  
   const [isDrawing, setIsDrawing] = useState(false);
   // Bezier Path State
   const [currentPathPoints, setCurrentPathPoints] = useState<{x: number, y: number, type: 'M' | 'L' | 'C', cp1?: {x:number, y:number}, cp2?: {x:number, y:number}}[]>([]);
@@ -530,6 +534,58 @@ export default function KonvaCanvas({
         }, 100);
     }
   }, [exportRequest, onExportComplete, shapes, width, height]);
+
+  // Helper: Update node properties without recreating
+  const updateNodeProperties = useCallback((node: Konva.Node, shapeData: Shape, commonProps: any) => {
+    // Update transform properties
+    node.setAttrs(commonProps);
+    
+    // Update shape-specific properties based on type
+    if (shapeData.type === 'rect' && node instanceof Konva.Rect) {
+      node.setAttrs({
+        width: (shapeData as any).width,
+        height: (shapeData as any).height,
+        cornerRadius: (shapeData as any).cornerRadius,
+      });
+    } else if (shapeData.type === 'circle' && node instanceof Konva.Circle) {
+      node.setAttrs({
+        radius: (shapeData as any).radius,
+      });
+    } else if (shapeData.type === 'text' && node instanceof Konva.Text) {
+      node.setAttrs({
+        text: (shapeData as any).text,
+        fontSize: (shapeData as any).fontSize,
+        fontFamily: (shapeData as any).fontFamily,
+        fontStyle: (shapeData as any).fontWeight === 'bold' ? 'bold' : 'normal',
+        align: (shapeData as any).align,
+      });
+    } else if (shapeData.type === 'path' && node instanceof Konva.Path) {
+      node.setAttrs({
+        data: (shapeData as any).data,
+      });
+    }
+    
+    // Update appearance
+    if (shapeData.fills && shapeData.fills.length > 0) {
+      const fill = shapeData.fills[0];
+      if (fill.visible && fill.type === 'solid') {
+        node.setAttr('fill', fill.color);
+      }
+    } else if ((shapeData as any).fill) {
+      node.setAttr('fill', (shapeData as any).fill);
+    }
+    
+    if (shapeData.strokes && shapeData.strokes.length > 0) {
+      const stroke = shapeData.strokes[0];
+      if (stroke.visible) {
+        node.setAttr('stroke', stroke.color);
+        node.setAttr('strokeWidth', stroke.width);
+      }
+    } else if ((shapeData as any).stroke) {
+      node.setAttr('stroke', (shapeData as any).stroke);
+      node.setAttr('strokeWidth', (shapeData as any).strokeWidth);
+    }
+  }, []);
 
   // Helper to render a single shape (recursive)
   const activeGroupPath = React.useMemo(() => activeGroupId ? getPathToNode(shapes, activeGroupId) : null, [shapes, activeGroupId]);
@@ -1029,12 +1085,6 @@ export default function KonvaCanvas({
     }
 
     if (node) {
-      // Remove any existing event listeners first to prevent duplicates
-      node.off('click tap');
-      node.off('dragmove');
-      node.off('dragend');
-      node.off('transformend');
-      
       // Event Handling
       node.on('click tap', (e) => {
         if (activeTool === 'select' || activeTool === 'direct-select') {
@@ -1267,29 +1317,99 @@ export default function KonvaCanvas({
     return node;
   };
 
-  // Render shapes effect
+  // Render shapes effect - with reconciliation (update instead of destroy/recreate)
   useEffect(() => {
     if (!layerRef.current || !transformerRef.current) return;
 
-    // Clear layer (except transformer)
+    const layer = layerRef.current;
     const transformer = transformerRef.current;
+    const nodeMap = nodeMapRef.current;
     
-    // Detach transformer before destroying nodes to prevent "Cannot read properties of null (reading 'getAbsoluteTransform')"
+    // Detach transformer during updates
     transformer.nodes([]);
 
-    const children = [...layerRef.current.children];
-    children.forEach(child => {
-        if (child !== transformer) child.destroy();
+    // Track which shape IDs we've seen in this render
+    const currentShapeIds = new Set<string>();
+    const getAllShapeIds = (shapes: Shape[]): void => {
+      shapes.forEach(shape => {
+        currentShapeIds.add(shape.id);
+        if ((shape.type === 'group' || shape.type === 'artboard') && shape.children) {
+          getAllShapeIds(shape.children);
+        }
+      });
+    };
+    getAllShapeIds(visibleShapes);
+
+    // Remove nodes that no longer exist in shapes
+    Array.from(nodeMap.entries()).forEach(([id, node]) => {
+      if (!currentShapeIds.has(id)) {
+        node.off(); // Remove all event listeners
+        node.destroy();
+        nodeMap.delete(id);
+      }
     });
 
-    // Render all shapes
+    // Render/update shapes
     visibleShapes.forEach(shape => {
-        const node = renderShape(shape);
-        if (node) layerRef.current!.add(node as any);
+      const existingNode = nodeMap.get(shape.id);
+      
+      if (existingNode && existingNode.getLayer()) {
+        // Node exists - just update its properties
+        // Note: For complex cases (type changes, appearance system), still recreate
+        const needsRecreate = 
+          (shape.fills && shape.fills.length > 1) || 
+          (shape.strokes && shape.strokes.length > 1) ||
+          existingNode.className !== shape.type.charAt(0).toUpperCase() + shape.type.slice(1);
+        
+        if (needsRecreate) {
+          existingNode.off();
+          existingNode.destroy();
+          nodeMap.delete(shape.id);
+          const newNode = renderShape(shape);
+          if (newNode) {
+            layer.add(newNode as any);
+            nodeMap.set(shape.id, newNode);
+          }
+        } else {
+          // Just update properties - much faster!
+          // Build commonProps (simplified version)
+          const commonProps = {
+            x: shape.x,
+            y: shape.y,
+            rotation: shape.rotation || 0,
+            scaleX: (shape as any).scaleX || 1,
+            scaleY: (shape as any).scaleY || 1,
+            opacity: shape.opacity ?? 1,
+            visible: shape.visible !== false,
+            draggable: (activeTool === 'select' || activeTool === 'direct-select') && !shape.locked,
+          };
+          
+          try {
+            updateNodeProperties(existingNode, shape, commonProps);
+          } catch (e) {
+            console.warn('Failed to update node, recreating:', e);
+            existingNode.off();
+            existingNode.destroy();
+            nodeMap.delete(shape.id);
+            const newNode = renderShape(shape);
+            if (newNode) {
+              layer.add(newNode as any);
+              nodeMap.set(shape.id, newNode);
+            }
+          }
+        }
+      } else {
+        // Node doesn't exist - create it
+        const newNode = renderShape(shape);
+        if (newNode) {
+          layer.add(newNode as any);
+          nodeMap.set(shape.id, newNode);
+        }
+      }
     });
     
-    // Ensure layer updates before transformer tries to attach
-    layerRef.current.batchDraw();
+    // Force layer to update DOM
+    layer.batchDraw();
 
     // Render temporary path being drawn
     if (currentPathPoints.length > 0) {
@@ -1371,26 +1491,24 @@ export default function KonvaCanvas({
 
   }, [visibleShapes, shapes, activeTool, currentPathPoints]);
 
-  // Selection and Gradient Editor Effect - runs after shapes are rendered
+  // Selection and Gradient Editor Effect - now stable without timing hacks
   useEffect(() => {
       if (!layerRef.current || !transformerRef.current) return;
       const transformer = transformerRef.current;
-      
-      // Small delay to ensure nodes are fully rendered and added to layer
-      const timeoutId = setTimeout(() => {
+      const nodeMap = nodeMapRef.current;
 
-      // Handle Selection
+      // Handle Selection - use node map for direct access
       if (selectedIds && selectedIds.length > 0) {
           const nodes: Konva.Node[] = [];
           selectedIds.forEach(id => {
-              const node = layerRef.current?.findOne(`#${id}`);
-              if (node) {
-                  // Ensure node is visible and not destroyed
-                  if (!node.isDestroyed && node.isVisible()) {
-                      nodes.push(node as Konva.Node);
-                  }
-              } else {
-                  console.warn(`Node with id ${id} not found in layer`);
+              // Try node map first (faster), fallback to findOne
+              let node = nodeMap.get(id);
+              if (!node) {
+                  node = layerRef.current?.findOne(`#${id}`);
+              }
+              
+              if (node && node.getLayer() && node.isVisible()) {
+                  nodes.push(node);
               }
           });
           
@@ -1529,9 +1647,6 @@ export default function KonvaCanvas({
       transformer.moveToTop();
       gradientGroupRef.current?.moveToTop();
       layerRef.current.batchDraw();
-      }, 0); // Execute after current call stack clears
-      
-      return () => clearTimeout(timeoutId);
   }, [selectedIds, shapes, visibleShapes, activeTool]);
 
   // Drawing Logic (Rect/Text/Pen)
