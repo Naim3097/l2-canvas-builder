@@ -90,6 +90,10 @@ export default function KonvaCanvas({
   // Node reconciliation map: shapeId -> Konva.Node
   const nodeMapRef = useRef<Map<string, Konva.Node>>(new Map());
   
+  // State health monitoring - detect and recover from stuck states
+  const lastRenderAttempt = useRef<number>(0);
+  const consecutiveFailures = useRef<number>(0);
+  
   const [isDrawing, setIsDrawing] = useState(false);
   // Bezier Path State
   const [currentPathPoints, setCurrentPathPoints] = useState<{x: number, y: number, type: 'M' | 'L' | 'C', cp1?: {x:number, y:number}, cp2?: {x:number, y:number}}[]>([]);
@@ -1325,8 +1329,13 @@ export default function KonvaCanvas({
     const transformer = transformerRef.current;
     const nodeMap = nodeMapRef.current;
     
-    // Detach transformer during updates
-    transformer.nodes([]);
+    // CRITICAL: Detach transformer AND clear its internal state during updates
+    try {
+      transformer.nodes([]);
+      transformer.detach(); // Force complete detachment
+    } catch (e) {
+      console.warn('Error detaching transformer:', e);
+    }
 
     // Track which shape IDs we've seen in this render
     const currentShapeIds = new Set<string>();
@@ -1340,70 +1349,104 @@ export default function KonvaCanvas({
     };
     getAllShapeIds(visibleShapes);
 
-    // Remove nodes that no longer exist in shapes
+    // Remove nodes that no longer exist in shapes - with safe cleanup
     Array.from(nodeMap.entries()).forEach(([id, node]) => {
       if (!currentShapeIds.has(id)) {
-        node.off(); // Remove all event listeners
-        node.destroy();
+        try {
+          node.off(); // Remove all event listeners
+          node.destroy();
+        } catch (e) {
+          console.warn(`Error destroying node ${id}:`, e);
+        }
         nodeMap.delete(id);
       }
     });
 
     // Render/update shapes
     visibleShapes.forEach(shape => {
-      const existingNode = nodeMap.get(shape.id);
-      
-      if (existingNode && existingNode.getLayer()) {
-        // Node exists - just update its properties
-        // Note: For complex cases (type changes, appearance system), still recreate
-        const needsRecreate = 
-          (shape.fills && shape.fills.length > 1) || 
-          (shape.strokes && shape.strokes.length > 1) ||
-          existingNode.className !== shape.type.charAt(0).toUpperCase() + shape.type.slice(1);
+      try {
+        const existingNode = nodeMap.get(shape.id);
         
-        if (needsRecreate) {
-          existingNode.off();
-          existingNode.destroy();
-          nodeMap.delete(shape.id);
-          const newNode = renderShape(shape);
-          if (newNode) {
-            layer.add(newNode as any);
-            nodeMap.set(shape.id, newNode);
-          }
-        } else {
-          // Just update properties - much faster!
-          // Build commonProps (simplified version)
-          const commonProps = {
-            x: shape.x,
-            y: shape.y,
-            rotation: shape.rotation || 0,
-            scaleX: (shape as any).scaleX || 1,
-            scaleY: (shape as any).scaleY || 1,
-            opacity: shape.opacity ?? 1,
-            visible: shape.visible !== false,
-            draggable: (activeTool === 'select' || activeTool === 'direct-select') && !shape.locked,
-          };
+        // Check if node is still valid
+        const nodeIsValid = existingNode && existingNode.getLayer() && !existingNode.isDestroying();
+        
+        if (nodeIsValid) {
+          // Node exists - just update its properties
+          // Note: For complex cases (type changes, appearance system), still recreate
+          const needsRecreate = 
+            (shape.fills && shape.fills.length > 1) || 
+            (shape.strokes && shape.strokes.length > 1) ||
+            existingNode.className !== shape.type.charAt(0).toUpperCase() + shape.type.slice(1);
           
-          try {
-            updateNodeProperties(existingNode, shape, commonProps);
-          } catch (e) {
-            console.warn('Failed to update node, recreating:', e);
-            existingNode.off();
-            existingNode.destroy();
+          if (needsRecreate) {
+            // Safe cleanup before recreate
+            try {
+              existingNode.off();
+              existingNode.destroy();
+            } catch (e) {
+              console.warn('Error destroying node:', e);
+            }
             nodeMap.delete(shape.id);
             const newNode = renderShape(shape);
             if (newNode) {
               layer.add(newNode as any);
               nodeMap.set(shape.id, newNode);
             }
+          } else {
+            // Just update properties - much faster!
+            const commonProps = {
+              x: shape.x,
+              y: shape.y,
+              rotation: shape.rotation || 0,
+              scaleX: (shape as any).scaleX || 1,
+              scaleY: (shape as any).scaleY || 1,
+              opacity: shape.opacity ?? 1,
+              visible: shape.visible !== false,
+              draggable: (activeTool === 'select' || activeTool === 'direct-select') && !shape.locked,
+            };
+            
+            try {
+              updateNodeProperties(existingNode, shape, commonProps);
+            } catch (e) {
+              console.warn('Failed to update node properties, recreating:', e);
+              try {
+                existingNode.off();
+                existingNode.destroy();
+              } catch (destroyErr) {
+                console.warn('Error during cleanup:', destroyErr);
+              }
+              nodeMap.delete(shape.id);
+              const newNode = renderShape(shape);
+              if (newNode) {
+                layer.add(newNode as any);
+                nodeMap.set(shape.id, newNode);
+              }
+            }
+          }
+        } else {
+          // Node doesn't exist or is invalid - create it
+          if (existingNode) {
+            // Clean up invalid node reference
+            nodeMap.delete(shape.id);
+          }
+          const newNode = renderShape(shape);
+          if (newNode) {
+            layer.add(newNode as any);
+            nodeMap.set(shape.id, newNode);
           }
         }
-      } else {
-        // Node doesn't exist - create it
-        const newNode = renderShape(shape);
-        if (newNode) {
-          layer.add(newNode as any);
-          nodeMap.set(shape.id, newNode);
+      } catch (err) {
+        console.error('Critical error rendering shape:', shape.id, err);
+        // Try to clean up and continue
+        const existingNode = nodeMap.get(shape.id);
+        if (existingNode) {
+          try {
+            existingNode.off();
+            existingNode.destroy();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          nodeMap.delete(shape.id);
         }
       }
     });
@@ -1487,39 +1530,111 @@ export default function KonvaCanvas({
 
     // Move transformer to top
     transformer.moveToTop();
+    
+    // State health check - detect stuck renders
+    const now = Date.now();
+    if (now - lastRenderAttempt.current < 100) {
+      consecutiveFailures.current++;
+      if (consecutiveFailures.current > 10) {
+        console.error('EMERGENCY: Detected render loop, clearing node map');
+        // Emergency cleanup
+        try {
+          Array.from(nodeMap.entries()).forEach(([id, node]) => {
+            try {
+              node.off();
+              node.destroy();
+            } catch (e) {
+              // ignore
+            }
+          });
+          nodeMap.clear();
+          transformer.nodes([]);
+          consecutiveFailures.current = 0;
+        } catch (e) {
+          console.error('Emergency cleanup failed:', e);
+        }
+      }
+    } else {
+      consecutiveFailures.current = 0;
+    }
+    lastRenderAttempt.current = now;
+    
     layerRef.current.batchDraw();
 
   }, [visibleShapes, shapes, activeTool, currentPathPoints]);
 
-  // Selection and Gradient Editor Effect - now stable without timing hacks
+  // Selection and Gradient Editor Effect - with comprehensive error handling
   useEffect(() => {
       if (!layerRef.current || !transformerRef.current) return;
-      const transformer = transformerRef.current;
-      const nodeMap = nodeMapRef.current;
+      
+      console.log('Selection effect triggered:', { 
+        selectedIds, 
+        nodeMapSize: nodeMapRef.current.size,
+        transformerAttached: transformerRef.current.getLayer() ? 'yes' : 'no'
+      });
+      
+      try {
+          const transformer = transformerRef.current;
+          const nodeMap = nodeMapRef.current;
 
-      // Handle Selection - use node map for direct access
-      if (selectedIds && selectedIds.length > 0) {
-          const nodes: Konva.Node[] = [];
-          selectedIds.forEach(id => {
-              // Try node map first (faster), fallback to findOne
-              let node = nodeMap.get(id);
-              if (!node) {
-                  node = layerRef.current?.findOne(`#${id}`);
+          // Validate transformer is still attached
+          if (!transformer.getLayer()) {
+              console.warn('Transformer detached from layer, reattaching');
+              layerRef.current.add(transformer);
+          }
+
+          // Handle Selection - use node map for direct access
+          if (selectedIds && selectedIds.length > 0) {
+              const nodes: Konva.Node[] = [];
+              const failedIds: string[] = [];
+              
+              selectedIds.forEach(id => {
+                  try {
+                      // Try node map first (faster), fallback to findOne
+                      let node = nodeMap.get(id);
+                      if (!node || node.isDestroying() || !node.getLayer()) {
+                          // Node is stale or destroyed, try finding it again
+                          node = layerRef.current?.findOne(`#${id}`);
+                          
+                          // Update node map if we found it
+                          if (node && node.getLayer()) {
+                              nodeMap.set(id, node);
+                          }
+                      }
+                      
+                      if (node && node.getLayer() && node.isVisible()) {
+                          nodes.push(node);
+                      } else {
+                          failedIds.push(id);
+                      }
+                  } catch (err) {
+                      console.warn(`Error selecting node ${id}:`, err);
+                      failedIds.push(id);
+                  }
+              });
+              
+              if (failedIds.length > 0) {
+                  console.warn('Failed to select nodes:', failedIds);
               }
               
-              if (node && node.getLayer() && node.isVisible()) {
-                  nodes.push(node);
+              if (nodes.length > 0) {
+                  transformer.nodes(nodes);
+                  transformer.moveToTop();
+              } else {
+                  console.warn('No valid nodes found for selection');
+                  transformer.nodes([]);
               }
-          });
-          
-          if (nodes.length > 0) {
-              transformer.nodes(nodes);
-              transformer.moveToTop();
           } else {
               transformer.nodes([]);
           }
-      } else {
-          transformer.nodes([]);
+      } catch (err) {
+          console.error('Critical error in selection effect:', err);
+          // Emergency cleanup
+          try {
+              transformerRef.current?.nodes([]);
+          } catch (e) {
+              console.error('Failed to reset transformer:', e);
+          }
       }
 
       // Gradient Editor Logic

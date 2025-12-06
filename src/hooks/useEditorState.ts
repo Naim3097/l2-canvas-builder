@@ -154,6 +154,7 @@ export const useEditorState = () => {
     }, [performUpdate]);
 
     const updateShape = useCallback((id: string, updates: Partial<Shape>) => {
+        console.log('updateShape called:', id, updates);
         performUpdate(draft => {
             if (globalEditMode) {
                 draft.shapes = updateSimilarShapesInTree(draft.shapes as Shape[], id, updates);
