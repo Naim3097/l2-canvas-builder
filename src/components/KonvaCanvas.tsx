@@ -1029,6 +1029,12 @@ export default function KonvaCanvas({
     }
 
     if (node) {
+      // Remove any existing event listeners first to prevent duplicates
+      node.off('click tap');
+      node.off('dragmove');
+      node.off('dragend');
+      node.off('transformend');
+      
       // Event Handling
       node.on('click tap', (e) => {
         if (activeTool === 'select' || activeTool === 'direct-select') {
@@ -1040,13 +1046,23 @@ export default function KonvaCanvas({
             if (!isDeepSelect) {
                 // Walk up to find the top-level group
                 let current: any = e.target;
-                while (current.parent && current.parent !== layerRef.current) {
+                let maxDepth = 10; // Prevent infinite loops
+                while (current.parent && current.parent !== layerRef.current && maxDepth > 0) {
                      // If we have an active group context, stop when we hit it
                      if (activeGroupId && current.parent.id() === activeGroupId) break;
                      
                      current = current.parent;
+                     maxDepth--;
                 }
-                targetId = current.id();
+                if (current && current.id) {
+                    targetId = current.id();
+                }
+            }
+            
+            // Validate targetId before proceeding
+            if (!targetId || targetId === '' || targetId === 'undefined') {
+                console.warn('Invalid targetId in selection', targetId);
+                return;
             }
             
             // Handle Multi-selection

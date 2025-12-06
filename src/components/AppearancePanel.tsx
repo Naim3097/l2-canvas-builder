@@ -89,7 +89,7 @@ const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: numbe
                     <select 
                         value={fill.type} 
                         onChange={(e) => onUpdate({ type: e.target.value as any })}
-                        className="w-full bg-transparent text-xs text-gray-300 outline-none border-none p-0 cursor-pointer hover:text-white truncate"
+                        className="w-full bg-transparent text-xs text-gray-300 outline-none border-none p-0 cursor-pointer hover:text-white truncate [&>option]:bg-gray-800 [&>option]:text-white"
                     >
                         <option value="solid">Solid</option>
                         <option value="linear-gradient">Linear</option>
@@ -210,7 +210,7 @@ const StrokeRow = ({ stroke, index, onUpdate, onRemove }: { stroke: Stroke, inde
                             <select 
                                 value={stroke.cap || 'butt'} 
                                 onChange={(e) => onUpdate({ cap: e.target.value as any })}
-                                className="w-full bg-black/20 text-xs text-gray-300 rounded px-1 py-1 outline-none"
+                                className="w-full bg-black/20 text-xs text-gray-300 rounded px-1 py-1 outline-none [&>option]:bg-gray-800 [&>option]:text-white"
                             >
                                 <option value="butt">Butt</option>
                                 <option value="round">Round</option>
@@ -222,7 +222,7 @@ const StrokeRow = ({ stroke, index, onUpdate, onRemove }: { stroke: Stroke, inde
                             <select 
                                 value={stroke.join || 'miter'} 
                                 onChange={(e) => onUpdate({ join: e.target.value as any })}
-                                className="w-full bg-black/20 text-xs text-gray-300 rounded px-1 py-1 outline-none"
+                                className="w-full bg-black/20 text-xs text-gray-300 rounded px-1 py-1 outline-none [&>option]:bg-gray-800 [&>option]:text-white"
                             >
                                 <option value="miter">Miter</option>
                                 <option value="round">Round</option>
