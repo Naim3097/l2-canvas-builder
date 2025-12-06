@@ -1077,6 +1077,7 @@ export default function KonvaCanvas({
             // Disable snapping if Shift is held
             if (keys.current.shift) {
                 clearGuides(layer);
+                layer.batchDraw();
                 return;
             }
 
@@ -1087,6 +1088,7 @@ export default function KonvaCanvas({
             if (snapResult.y !== null) target.y(snapResult.y);
 
             drawGuides(layer, snapResult.guides);
+            layer.batchDraw();
         }
       });
 
