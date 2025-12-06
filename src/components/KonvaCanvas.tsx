@@ -1287,6 +1287,9 @@ export default function KonvaCanvas({
         const node = renderShape(shape);
         if (node) layerRef.current!.add(node as any);
     });
+    
+    // Ensure layer updates before transformer tries to attach
+    layerRef.current.batchDraw();
 
     // Render temporary path being drawn
     if (currentPathPoints.length > 0) {
@@ -1366,22 +1369,37 @@ export default function KonvaCanvas({
     transformer.moveToTop();
     layerRef.current.batchDraw();
 
-  }, [visibleShapes, shapes, activeTool, currentPathPoints]); // Removed selectedIds
+  }, [visibleShapes, shapes, activeTool, currentPathPoints]);
 
-  // Selection and Gradient Editor Effect
+  // Selection and Gradient Editor Effect - runs after shapes are rendered
   useEffect(() => {
       if (!layerRef.current || !transformerRef.current) return;
       const transformer = transformerRef.current;
+      
+      // Small delay to ensure nodes are fully rendered and added to layer
+      const timeoutId = setTimeout(() => {
 
       // Handle Selection
       if (selectedIds && selectedIds.length > 0) {
           const nodes: Konva.Node[] = [];
           selectedIds.forEach(id => {
               const node = layerRef.current?.findOne(`#${id}`);
-              if (node) nodes.push(node as Konva.Node);
+              if (node) {
+                  // Ensure node is visible and not destroyed
+                  if (!node.isDestroyed && node.isVisible()) {
+                      nodes.push(node as Konva.Node);
+                  }
+              } else {
+                  console.warn(`Node with id ${id} not found in layer`);
+              }
           });
-          transformer.nodes(nodes);
-          transformer.moveToTop();
+          
+          if (nodes.length > 0) {
+              transformer.nodes(nodes);
+              transformer.moveToTop();
+          } else {
+              transformer.nodes([]);
+          }
       } else {
           transformer.nodes([]);
       }
@@ -1511,6 +1529,9 @@ export default function KonvaCanvas({
       transformer.moveToTop();
       gradientGroupRef.current?.moveToTop();
       layerRef.current.batchDraw();
+      }, 0); // Execute after current call stack clears
+      
+      return () => clearTimeout(timeoutId);
   }, [selectedIds, shapes, visibleShapes, activeTool]);
 
   // Drawing Logic (Rect/Text/Pen)
