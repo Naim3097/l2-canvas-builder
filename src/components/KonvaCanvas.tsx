@@ -41,6 +41,7 @@ interface KonvaCanvasProps {
   onMergeShapes?: (ids: string[]) => void;
   viewMode?: 'rgb' | 'cmyk' | 'outline';
   resetViewTrigger?: number | null;
+  resetStateTrigger?: number | null;
 }
 
 const parsePathData = (d: string) => {
@@ -79,7 +80,8 @@ export default function KonvaCanvas({
   onExitGroup,
   onMergeShapes,
   viewMode = 'rgb',
-  resetViewTrigger
+  resetViewTrigger,
+  resetStateTrigger
 }: KonvaCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -117,6 +119,38 @@ export default function KonvaCanvas({
       }
     }
   }, [resetViewTrigger]);
+
+  // Reset State Effect (Emergency)
+  useEffect(() => {
+    if (resetStateTrigger) {
+      console.log('Emergency State Reset Triggered');
+      
+      // Clear node map
+      const nodeMap = nodeMapRef.current;
+      Array.from(nodeMap.entries()).forEach(([id, node]) => {
+        try {
+          node.off();
+          node.destroy();
+        } catch (e) {
+          // ignore
+        }
+      });
+      nodeMap.clear();
+      
+      // Clear transformer
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.detach();
+      }
+      
+      // Force redraw
+      if (layerRef.current) {
+        layerRef.current.batchDraw();
+      }
+      
+      // Note: The next render cycle will recreate all nodes because nodeMap is empty
+    }
+  }, [resetStateTrigger]);
   
   const keys = useKeyboardRef();
 
@@ -540,54 +574,101 @@ export default function KonvaCanvas({
   }, [exportRequest, onExportComplete, shapes, width, height]);
 
   // Helper: Update node properties without recreating
-  const updateNodeProperties = useCallback((node: Konva.Node, shapeData: Shape, commonProps: any) => {
-    // Update transform properties
-    node.setAttrs(commonProps);
-    
-    // Update shape-specific properties based on type
-    if (shapeData.type === 'rect' && node instanceof Konva.Rect) {
-      node.setAttrs({
-        width: (shapeData as any).width,
-        height: (shapeData as any).height,
-        cornerRadius: (shapeData as any).cornerRadius,
-      });
-    } else if (shapeData.type === 'circle' && node instanceof Konva.Circle) {
-      node.setAttrs({
-        radius: (shapeData as any).radius,
-      });
-    } else if (shapeData.type === 'text' && node instanceof Konva.Text) {
-      node.setAttrs({
-        text: (shapeData as any).text,
-        fontSize: (shapeData as any).fontSize,
-        fontFamily: (shapeData as any).fontFamily,
-        fontStyle: (shapeData as any).fontWeight === 'bold' ? 'bold' : 'normal',
-        align: (shapeData as any).align,
-      });
-    } else if (shapeData.type === 'path' && node instanceof Konva.Path) {
-      node.setAttrs({
-        data: (shapeData as any).data,
-      });
-    }
-    
-    // Update appearance
-    if (shapeData.fills && shapeData.fills.length > 0) {
-      const fill = shapeData.fills[0];
-      if (fill.visible && fill.type === 'solid') {
-        node.setAttr('fill', fill.color);
+  // Returns true if update was successful, false if recreation is needed
+  const updateNodeProperties = useCallback((node: Konva.Node, shapeData: Shape, commonProps: any): boolean => {
+    try {
+      // Update transform properties
+      node.setAttrs(commonProps);
+      
+      // Update shape-specific properties based on type
+      if (shapeData.type === 'rect' && node instanceof Konva.Rect) {
+        node.setAttrs({
+          width: (shapeData as any).width,
+          height: (shapeData as any).height,
+          cornerRadius: (shapeData as any).cornerRadius || 0,
+        });
+      } else if (shapeData.type === 'circle' && node instanceof Konva.Circle) {
+        node.setAttrs({
+          radius: (shapeData as any).radius,
+        });
+      } else if (shapeData.type === 'text' && node instanceof Konva.Text) {
+        node.setAttrs({
+          text: (shapeData as any).text,
+          fontSize: (shapeData as any).fontSize,
+          fontFamily: (shapeData as any).fontFamily,
+          fontStyle: (shapeData as any).fontWeight === 'bold' ? 'bold' : 'normal',
+          align: (shapeData as any).align,
+        });
+      } else if (shapeData.type === 'path' && node instanceof Konva.Path) {
+        node.setAttrs({
+          data: (shapeData as any).data,
+        });
       }
-    } else if ((shapeData as any).fill) {
-      node.setAttr('fill', (shapeData as any).fill);
-    }
-    
-    if (shapeData.strokes && shapeData.strokes.length > 0) {
-      const stroke = shapeData.strokes[0];
-      if (stroke.visible) {
-        node.setAttr('stroke', stroke.color);
-        node.setAttr('strokeWidth', stroke.width);
+      
+      // Update appearance - Handle Fills
+      if (shapeData.fills && shapeData.fills.length > 0) {
+        const fill = shapeData.fills[0];
+        if (!fill.visible) {
+          node.setAttr('fillEnabled', false);
+        } else {
+          node.setAttr('fillEnabled', true);
+          
+          if (fill.type === 'solid') {
+            node.setAttr('fill', fill.color);
+            node.setAttr('fillLinearGradientColorStops', undefined);
+            node.setAttr('fillRadialGradientColorStops', undefined);
+            node.setAttr('fillPatternImage', undefined);
+          } else if (fill.type === 'linear-gradient') {
+            node.setAttr('fillPriority', 'linear-gradient');
+            node.setAttr('fillLinearGradientStartPoint', (shapeData as any).fillGradientStart || { x: 0, y: 0 });
+            node.setAttr('fillLinearGradientEndPoint', (shapeData as any).fillGradientEnd || { x: (shapeData as any).width || 100, y: (shapeData as any).height || 100 });
+            node.setAttr('fillLinearGradientColorStops', fill.gradientStops?.flatMap((s: any) => [s.offset, s.color]) || [0, 'black', 1, 'white']);
+          } else if (fill.type === 'radial-gradient') {
+            node.setAttr('fillPriority', 'radial-gradient');
+            node.setAttr('fillRadialGradientStartPoint', (shapeData as any).fillGradientStart || { x: 50, y: 50 });
+            node.setAttr('fillRadialGradientEndPoint', (shapeData as any).fillGradientEnd || { x: 50, y: 50 });
+            node.setAttr('fillRadialGradientStartRadius', 0);
+            node.setAttr('fillRadialGradientEndRadius', Math.max((shapeData as any).width || 100, (shapeData as any).height || 100) / 2);
+            node.setAttr('fillRadialGradientColorStops', fill.gradientStops?.flatMap((s: any) => [s.offset, s.color]) || [0, 'black', 1, 'white']);
+          } else if (fill.type === 'image') {
+            // Image fill requires loading, safer to recreate
+            return false;
+          }
+        }
+      } else if ((shapeData as any).fill) {
+        // Legacy/Simple fill
+        node.setAttr('fillEnabled', true);
+        node.setAttr('fill', (shapeData as any).fill);
+      } else {
+        node.setAttr('fillEnabled', false);
       }
-    } else if ((shapeData as any).stroke) {
-      node.setAttr('stroke', (shapeData as any).stroke);
-      node.setAttr('strokeWidth', (shapeData as any).strokeWidth);
+      
+      // Update appearance - Handle Strokes
+      if (shapeData.strokes && shapeData.strokes.length > 0) {
+        const stroke = shapeData.strokes[0];
+        if (!stroke.visible) {
+          node.setAttr('strokeEnabled', false);
+        } else {
+          node.setAttr('strokeEnabled', true);
+          node.setAttr('stroke', stroke.color);
+          node.setAttr('strokeWidth', stroke.width);
+          node.setAttr('dash', (shapeData as any).strokeDash || []);
+          node.setAttr('lineCap', (shapeData as any).lineCap || 'round');
+          node.setAttr('lineJoin', (shapeData as any).lineJoin || 'round');
+        }
+      } else if ((shapeData as any).stroke) {
+        node.setAttr('strokeEnabled', true);
+        node.setAttr('stroke', (shapeData as any).stroke);
+        node.setAttr('strokeWidth', (shapeData as any).strokeWidth);
+        node.setAttr('dash', (shapeData as any).strokeDash || []);
+      } else {
+        node.setAttr('strokeEnabled', false);
+      }
+
+      return true;
+    } catch (e) {
+      console.warn('Error updating node properties:', e);
+      return false;
     }
   }, []);
 
@@ -1378,21 +1459,9 @@ export default function KonvaCanvas({
             (shape.strokes && shape.strokes.length > 1) ||
             existingNode.className !== shape.type.charAt(0).toUpperCase() + shape.type.slice(1);
           
-          if (needsRecreate) {
-            // Safe cleanup before recreate
-            try {
-              existingNode.off();
-              existingNode.destroy();
-            } catch (e) {
-              console.warn('Error destroying node:', e);
-            }
-            nodeMap.delete(shape.id);
-            const newNode = renderShape(shape);
-            if (newNode) {
-              layer.add(newNode as any);
-              nodeMap.set(shape.id, newNode);
-            }
-          } else {
+          let updateSuccess = false;
+          
+          if (!needsRecreate) {
             // Just update properties - much faster!
             const commonProps = {
               x: shape.x,
@@ -1406,21 +1475,26 @@ export default function KonvaCanvas({
             };
             
             try {
-              updateNodeProperties(existingNode, shape, commonProps);
+              updateSuccess = updateNodeProperties(existingNode, shape, commonProps);
             } catch (e) {
-              console.warn('Failed to update node properties, recreating:', e);
-              try {
-                existingNode.off();
-                existingNode.destroy();
-              } catch (destroyErr) {
-                console.warn('Error during cleanup:', destroyErr);
-              }
-              nodeMap.delete(shape.id);
-              const newNode = renderShape(shape);
-              if (newNode) {
-                layer.add(newNode as any);
-                nodeMap.set(shape.id, newNode);
-              }
+              console.warn('Failed to update node properties:', e);
+              updateSuccess = false;
+            }
+          }
+          
+          if (needsRecreate || !updateSuccess) {
+            // Safe cleanup before recreate
+            try {
+              existingNode.off();
+              existingNode.destroy();
+            } catch (e) {
+              console.warn('Error destroying node:', e);
+            }
+            nodeMap.delete(shape.id);
+            const newNode = renderShape(shape);
+            if (newNode) {
+              layer.add(newNode as any);
+              nodeMap.set(shape.id, newNode);
             }
           }
         } else {

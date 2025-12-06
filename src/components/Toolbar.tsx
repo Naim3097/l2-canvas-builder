@@ -23,6 +23,7 @@ interface ToolbarProps {
     previewMode: boolean;
     setPreviewMode: (mode: boolean) => void;
     onResetView?: () => void;
+    onResetState?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -46,7 +47,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     setRightPanelOpen,
     previewMode,
     setPreviewMode,
-    onResetView
+    onResetView,
+    onResetState
 }) => {
     return (
       <div className="h-12 border-b border-gray-800 flex items-center justify-between px-4 bg-[#1a1a1a]">
@@ -68,6 +70,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </div>
           <div className="text-xs text-gray-500 flex items-center gap-2">
              <button onClick={onResetView} className="hover:text-white flex items-center gap-1" title="Reset View (Ctrl+0)"><Maximize size={14} /> Reset View</button>
+             {onResetState && (
+                 <button onClick={onResetState} className="hover:text-red-400 flex items-center gap-1 ml-2" title="Force Reset State (Emergency)"><Undo size={14} /> Reset State</button>
+             )}
           </div>
         </div>
         <div className="flex gap-2">

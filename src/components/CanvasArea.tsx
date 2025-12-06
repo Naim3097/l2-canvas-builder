@@ -18,6 +18,7 @@ interface CanvasAreaProps {
     canUngroup?: boolean;
     canGroup?: boolean;
     resetViewTrigger?: number | null;
+    resetStateTrigger?: number | null;
 }
 
 export default function CanvasArea({
@@ -34,7 +35,8 @@ export default function CanvasArea({
     onContextMenuAction,
     canUngroup = false,
     canGroup = false,
-    resetViewTrigger
+    resetViewTrigger,
+    resetStateTrigger
 }: CanvasAreaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -91,6 +93,7 @@ export default function CanvasArea({
             onMergeShapes={onMergeShapes}
             viewMode={viewMode}
             resetViewTrigger={resetViewTrigger}
+            resetStateTrigger={resetStateTrigger}
           />
           
           {contextMenu && (

@@ -15,6 +15,7 @@ export default function Workspace() {
   const [exportRequest, setExportRequest] = useState<{ format: 'png' | 'jpg' | 'svg' | 'pdf', scale: number } | null>(null);
   const [isNewDocModalOpen, setIsNewDocModalOpen] = useState(false);
   const [resetViewTrigger, setResetViewTrigger] = useState<number | null>(null);
+  const [resetStateTrigger, setResetStateTrigger] = useState<number | null>(null);
   
   // UI State
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
@@ -192,6 +193,7 @@ export default function Workspace() {
                     onMergeShapes={mergeShapes}
                     viewMode={viewMode}
                     resetViewTrigger={resetViewTrigger}
+                    resetStateTrigger={resetStateTrigger}
                     canUngroup={canUngroup}
                     canGroup={selectedIds.length > 0}
                     onContextMenuAction={(action) => {
