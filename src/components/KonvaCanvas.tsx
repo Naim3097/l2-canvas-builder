@@ -92,6 +92,10 @@ export default function KonvaCanvas({
   // Node reconciliation map: shapeId -> Konva.Node
   const nodeMapRef = useRef<Map<string, Konva.Node>>(new Map());
   
+  // Refs for event handlers to access latest state without re-binding
+  const shapesRef = useRef<Shape[]>(shapes);
+  shapesRef.current = shapes;
+  
   // State health monitoring - detect and recover from stuck states
   const lastRenderAttempt = useRef<number>(0);
   const consecutiveFailures = useRef<number>(0);
@@ -1271,7 +1275,7 @@ export default function KonvaCanvas({
                         return item;
                     });
                 };
-                onShapesChange?.(updateTree(shapes));
+                onShapesChange?.(updateTree(shapesRef.current));
             } else {
                 const newX = e.target.x();
                 const newY = e.target.y();
@@ -1288,7 +1292,7 @@ export default function KonvaCanvas({
                     });
                 };
                 
-                onShapesChange?.(updateShapeInTree(shapes));
+                onShapesChange?.(updateShapeInTree(shapesRef.current));
             }
         }
       });
@@ -1348,7 +1352,7 @@ export default function KonvaCanvas({
                         return item;
                     });
                 };
-                onShapesChange?.(updateTree(shapes));
+                onShapesChange?.(updateTree(shapesRef.current));
 
             } else {
                 const node = e.target;
@@ -1393,7 +1397,7 @@ export default function KonvaCanvas({
                     });
                 };
                 
-                onShapesChange?.(updateShapeInTree(shapes));
+                onShapesChange?.(updateShapeInTree(shapesRef.current));
             }
         }
       });

@@ -22,6 +22,13 @@
 **Issue:** `CanvasArea` was receiving `onSelect` but `KonvaCanvas` expected `onSelectionChange`.
 **Fix:** Verified that `page.tsx` correctly passes `onSelectionChange`. (Note: `CanvasArea` acts as a pass-through).
 
+### 4. Shape Reverting / Layering Issues
+**Issue:** Moving shapes caused them to revert to old positions or ignore z-index changes.
+**Fix:**
+- Implemented `shapesRef` in `KonvaCanvas` to solve stale closure issues.
+- Updated `dragend` and `transformend` handlers to use `shapesRef.current` instead of the stale `shapes` prop from closure.
+- This ensures that when a drag ends, it calculates the new state based on the *current* state (including recent z-index changes or other moves), not the state from when the node was created.
+
 ## How to Debug "Stuck" States
 
 If the application gets stuck again:
