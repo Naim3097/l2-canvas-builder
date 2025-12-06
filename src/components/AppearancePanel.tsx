@@ -72,7 +72,8 @@ const GradientEditor = ({ stops, onChange }: { stops: GradientStop[], onChange: 
 };
 
 const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: number, onUpdate: (updates: Partial<Fill>) => void, onRemove: () => void }) => {
-    const [expanded, setExpanded] = useState(false);
+    // Always show gradient editor for gradient types
+    const isGradient = fill.type === 'linear-gradient' || fill.type === 'radial-gradient';
 
     return (
         <div className="bg-[#1e1e1e] rounded mb-1 overflow-hidden">
@@ -106,20 +107,19 @@ const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: numbe
                         onChange={(e) => {
                             const newType = e.target.value as any;
                             const updates: any = { type: newType };
-                            // Auto-expand for gradients
+                            // Initialize gradient stops for gradients
                             if (newType === 'linear-gradient' || newType === 'radial-gradient') {
                                 if (!fill.gradientStops) {
                                     updates.gradientStops = [{offset: 0, color: '#000000'}, {offset: 1, color: '#ffffff'}];
                                 }
-                                setExpanded(true);
                             }
                             onUpdate(updates);
                         }}
                         className="w-full bg-transparent text-xs text-gray-300 outline-none border-none p-0 cursor-pointer hover:text-white truncate [&>option]:bg-gray-800 [&>option]:text-white"
                     >
                         <option value="solid">Solid</option>
-                        <option value="linear-gradient">Linear</option>
-                        <option value="radial-gradient">Radial</option>
+                        <option value="linear-gradient">Linear Gradient</option>
+                        <option value="radial-gradient">Radial Gradient</option>
                         <option value="image">Image</option>
                     </select>
                 </div>
@@ -133,18 +133,12 @@ const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: numbe
                 />
                 <span className="text-[10px] text-gray-600">%</span>
 
-                {(fill.type === 'linear-gradient' || fill.type === 'radial-gradient') && (
-                    <button onClick={() => setExpanded(!expanded)} className={`text-gray-500 hover:text-white ${expanded ? 'text-blue-400' : ''}`}>
-                        <Settings size={12} />
-                    </button>
-                )}
-
                 <button onClick={onRemove} className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 size={12} />
                 </button>
             </div>
 
-            {expanded && (fill.type === 'linear-gradient' || fill.type === 'radial-gradient') && (
+            {isGradient && (
                 <div className="px-2 pb-2 space-y-2">
                     <div className="text-[10px] text-gray-500 mb-1">Gradient Stops</div>
                     <GradientEditor 
