@@ -28,33 +28,40 @@ const GradientEditor = ({ stops, onChange }: { stops: GradientStop[], onChange: 
     };
 
     return (
-        <div className="mt-2 p-2 bg-black/20 rounded">
-            <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] text-gray-500">Gradient Stops</span>
-                <button onClick={addStop} className="text-gray-500 hover:text-white"><Plus size={10} /></button>
+        <div className="space-y-2">
+            <div className="flex justify-between items-center">
+                <span className="text-[10px] text-gray-400">Color Stops</span>
+                <button 
+                    onClick={addStop} 
+                    className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    title="Add gradient stop"
+                >
+                    <Plus size={10} /> Add
+                </button>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
                 {stops.map((stop, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full border border-gray-600 overflow-hidden relative cursor-pointer">
+                    <div key={i} className="flex items-center gap-2 bg-black/30 p-1.5 rounded">
+                        <div className="w-5 h-5 rounded border border-gray-600 overflow-hidden relative cursor-pointer" title="Click to change color">
                             <input 
                                 type="color" 
                                 value={stop.color} 
                                 onChange={(e) => updateStop(i, { color: e.target.value })} 
-                                className="absolute -top-2 -left-2 w-8 h-8 p-0 border-0" 
+                                className="absolute -top-2 -left-2 w-9 h-9 p-0 border-0 cursor-pointer" 
                             />
                         </div>
+                        <span className="text-[10px] text-gray-500 w-10">Stop {i + 1}</span>
                         <input 
                             type="number" 
                             min="0" max="100" 
                             value={Math.round(stop.offset * 100)} 
-                            onChange={(e) => updateStop(i, { offset: Number(e.target.value) / 100 })}
-                            className="w-8 bg-transparent text-right text-[10px] text-gray-400 focus:text-white outline-none border-b border-transparent focus:border-blue-500"
+                            onChange={(e) => updateStop(i, { offset: Math.max(0, Math.min(100, Number(e.target.value))) / 100 })}
+                            className="w-12 bg-gray-800 text-right text-[11px] text-gray-300 px-1 py-0.5 rounded outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <span className="text-[10px] text-gray-600">%</span>
                         {stops.length > 2 && (
-                            <button onClick={() => removeStop(i)} className="ml-auto text-gray-600 hover:text-red-400">
-                                <X size={10} />
+                            <button onClick={() => removeStop(i)} className="ml-auto text-gray-600 hover:text-red-400" title="Remove stop">
+                                <X size={12} />
                             </button>
                         )}
                     </div>
@@ -85,10 +92,29 @@ const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: numbe
                     </div>
                 )}
                 
+                {(fill.type === 'linear-gradient' || fill.type === 'radial-gradient') && (
+                    <div className="w-4 h-4 rounded border border-gray-600 overflow-hidden" style={{
+                        background: fill.type === 'linear-gradient' 
+                            ? `linear-gradient(90deg, ${fill.gradientStops?.map(s => `${s.color} ${s.offset * 100}%`).join(', ') || '#000 0%, #fff 100%'})`
+                            : `radial-gradient(circle, ${fill.gradientStops?.map(s => `${s.color} ${s.offset * 100}%`).join(', ') || '#000 0%, #fff 100%'})`
+                    }}></div>
+                )}
+                
                 <div className="flex-1 min-w-0">
                     <select 
                         value={fill.type} 
-                        onChange={(e) => onUpdate({ type: e.target.value as any })}
+                        onChange={(e) => {
+                            const newType = e.target.value as any;
+                            const updates: any = { type: newType };
+                            // Auto-expand for gradients
+                            if (newType === 'linear-gradient' || newType === 'radial-gradient') {
+                                if (!fill.gradientStops) {
+                                    updates.gradientStops = [{offset: 0, color: '#000000'}, {offset: 1, color: '#ffffff'}];
+                                }
+                                setExpanded(true);
+                            }
+                            onUpdate(updates);
+                        }}
                         className="w-full bg-transparent text-xs text-gray-300 outline-none border-none p-0 cursor-pointer hover:text-white truncate [&>option]:bg-gray-800 [&>option]:text-white"
                     >
                         <option value="solid">Solid</option>
@@ -119,7 +145,8 @@ const FillRow = ({ fill, index, onUpdate, onRemove }: { fill: Fill, index: numbe
             </div>
 
             {expanded && (fill.type === 'linear-gradient' || fill.type === 'radial-gradient') && (
-                <div className="px-2 pb-2">
+                <div className="px-2 pb-2 space-y-2">
+                    <div className="text-[10px] text-gray-500 mb-1">Gradient Stops</div>
                     <GradientEditor 
                         stops={fill.gradientStops || [{offset: 0, color: '#000000'}, {offset: 1, color: '#ffffff'}]} 
                         onChange={(stops) => onUpdate({ gradientStops: stops })}
