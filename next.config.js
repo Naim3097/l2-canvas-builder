@@ -1,12 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    turbopack: {
-      resolveAlias: {
-        canvas: false,
-        jsdom: false,
-      },
-    },
+    turbopack: {},
     webpack: (config) => {
       // Fix for Konva 'canvas' module not found
       config.resolve.alias = {
