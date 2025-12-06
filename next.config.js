@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    turbopack: {},
-    webpack: (config) => {
+    webpack: (config, { isServer }) => {
       // Fix for Konva 'canvas' module not found
       config.resolve.alias = {
         ...config.resolve.alias,
@@ -17,6 +16,7 @@ const nextConfig = {
         path: false,
         crypto: false,
       };
+      
       return config;
     },
   };
