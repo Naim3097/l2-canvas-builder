@@ -46,8 +46,8 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="pt-32 pb-0 px-6">
+        <div className="max-w-4xl mx-auto text-center mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium mb-8 border border-blue-100">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -82,7 +82,7 @@ export default function LandingPage() {
       </section>
 
       {/* App Preview / Hero Image Placeholder */}
-      <section className="px-6 pb-24">
+      <section className="px-6 pb-24 bg-white">
         <div className="max-w-6xl mx-auto rounded-xl overflow-hidden bg-slate-100 aspect-[16/9] relative group">
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-slate-400 font-medium">Interactive Workspace Preview</p>
@@ -137,7 +137,7 @@ export default function LandingPage() {
       </section>
 
       {/* Roadmap Section */}
-      <section id="roadmap" className="py-24 px-6">
+      <section id="roadmap" className="pt-24 pb-24 px-6 bg-white">
         <div className="max-w-4xl mx-auto">
           <div className="mb-12">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">Roadmap to Premium</h2>
@@ -172,7 +172,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 bg-slate-900 text-white">
+      <section className="pt-24 pb-24 bg-slate-900 text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to create?</h2>
           <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
@@ -187,7 +187,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-50 py-12 px-6">
+      <footer className="bg-slate-50 pt-12 pb-12 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center text-white text-xs font-bold">X</div>
