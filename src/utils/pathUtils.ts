@@ -1,4 +1,4 @@
-import { Command } from 'svg-path-parser';
+import { Command, parseSVG, makeAbsolute } from 'svg-path-parser';
 
 export interface PathPoint {
     type: 'M' | 'L' | 'C' | 'Z';
@@ -8,30 +8,143 @@ export interface PathPoint {
     cp2?: { x: number; y: number };
 }
 
+export const parsePathData = (d: string): PathPoint[] => {
+    try {
+        const commands = makeAbsolute(parseSVG(d));
+        return normalizePath(commands);
+    } catch (e) {
+        console.error("Path parse error", e);
+        return [];
+    }
+};
+
+export const reconstructPathData = (points: PathPoint[] | any[]): string => {
+    return points.map(pt => {
+        if (pt.type === 'M') return `M ${pt.x} ${pt.y}`;
+        if (pt.type === 'L') return `L ${pt.x} ${pt.y}`;
+        if (pt.type === 'C') return `C ${pt.cp1.x} ${pt.cp1.y}, ${pt.cp2.x} ${pt.cp2.y}, ${pt.x} ${pt.y}`;
+        if (pt.type === 'Z') return 'Z';
+        return '';
+    }).join(' ');
+};
+
 // Helper to reflect a point around a center
 const reflect = (x: number, y: number, cx: number, cy: number) => ({
     x: 2 * cx - x,
     y: 2 * cy - y
 });
 
-// Arc to Cubic Bezier conversion (simplified approximation or full implementation)
-// Based on standard SVG implementation
+// Helper to convert degrees to radians
+const degToRad = (deg: number) => (deg * Math.PI) / 180;
+
+// Arc to Cubic Bezier conversion
 const arcToCubic = (
-    x0: number, y0: number,
+    px: number, py: number,
     rx: number, ry: number,
     xAxisRotation: number,
-    largeArcFlag: boolean,
-    sweepFlag: boolean,
-    x: number, y: number
+    largeArcFlag: number,
+    sweepFlag: number,
+    cx: number, cy: number
 ): PathPoint[] => {
-    // This is a complex algorithm. For now, let's use a placeholder or a simple line if too complex for this step.
-    // However, the user wants "Premium". I should try to find a library or implement it properly.
-    // Let's use a simplified version or just return a Line for now and mark TODO if it's too much code.
-    // Actually, let's try to implement a basic version or use a library if available.
-    // Since I can't easily pull in another library without user permission/npm, I'll implement a basic one.
-    
-    // For the sake of this task, I will implement a robust normalizer.
-    return [{ type: 'L', x, y }]; // Placeholder for Arc
+    const curves: PathPoint[] = [];
+
+    if (rx === 0 || ry === 0) {
+        return [];
+    }
+
+    const sinPhi = Math.sin(degToRad(xAxisRotation));
+    const cosPhi = Math.cos(degToRad(xAxisRotation));
+
+    const pxp = cosPhi * (px - cx) / 2 + sinPhi * (py - cy) / 2;
+    const pyp = -sinPhi * (px - cx) / 2 + cosPhi * (py - cy) / 2;
+
+    if (pxp === 0 && pyp === 0) {
+        return [];
+    }
+
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+
+    const lambda = Math.pow(pxp, 2) / Math.pow(rx, 2) + Math.pow(pyp, 2) / Math.pow(ry, 2);
+
+    if (lambda > 1) {
+        rx *= Math.sqrt(lambda);
+        ry *= Math.sqrt(lambda);
+    }
+
+    let rxsq = Math.pow(rx, 2);
+    let rysq = Math.pow(ry, 2);
+    let pxpsq = Math.pow(pxp, 2);
+    let pypsq = Math.pow(pyp, 2);
+
+    let radicant = (rxsq * rysq - rxsq * pypsq - rysq * pxpsq) / (rxsq * pypsq + rysq * pxpsq);
+
+    if (radicant < 0) radicant = 0;
+
+    radicant = Math.sqrt(radicant);
+
+    if (largeArcFlag === sweepFlag) radicant = -radicant;
+
+    const cxp = radicant * rx / ry * pyp;
+    const cyp = radicant * -ry / rx * pxp;
+
+    const centerx_real = cosPhi * cxp - sinPhi * cyp + (px + cx) / 2;
+    const centery_real = sinPhi * cxp + cosPhi * cyp + (py + cy) / 2;
+
+    const v1x = (pxp - cxp) / rx;
+    const v1y = (pyp - cyp) / ry;
+    const v2x = (-pxp - cxp) / rx;
+    const v2y = (-pyp - cyp) / ry;
+
+    const angle = (u: {x:number, y:number}, v: {x:number, y:number}) => {
+        const sign = u.x * v.y - u.y * v.x < 0 ? -1 : 1;
+        let dot = u.x * v.x + u.y * v.y;
+        if (dot > 1) dot = 1;
+        if (dot < -1) dot = -1;
+        return sign * Math.acos(dot);
+    };
+
+    const theta1 = angle({x: 1, y: 0}, {x: v1x, y: v1y});
+    let deltaTheta = angle({x: v1x, y: v1y}, {x: v2x, y: v2y});
+
+    if (sweepFlag === 0 && deltaTheta > 0) deltaTheta -= 2 * Math.PI;
+    if (sweepFlag === 1 && deltaTheta < 0) deltaTheta += 2 * Math.PI;
+
+    const segments = Math.ceil(Math.abs(deltaTheta) / (Math.PI / 2));
+    const delta = deltaTheta / segments;
+    const t = 8 / 3 * Math.sin(delta / 4) * Math.sin(delta / 4) / Math.sin(delta / 2);
+
+    let startX = px;
+    let startY = py;
+
+    for (let i = 0; i < segments; i++) {
+        const cosTheta1 = Math.cos(theta1 + i * delta);
+        const sinTheta1 = Math.sin(theta1 + i * delta);
+        const cosTheta2 = Math.cos(theta1 + (i + 1) * delta);
+        const sinTheta2 = Math.sin(theta1 + (i + 1) * delta);
+
+        const epx = cosPhi * rx * cosTheta2 - sinPhi * ry * sinTheta2 + centerx_real;
+        const epy = sinPhi * rx * cosTheta2 + cosPhi * ry * sinTheta2 + centery_real;
+
+        const dx1 = t * (-cosPhi * rx * sinTheta1 - sinPhi * ry * cosTheta1);
+        const dy1 = t * (-sinPhi * rx * sinTheta1 + cosPhi * ry * cosTheta1);
+
+        const dx2 = t * (cosPhi * rx * sinTheta2 + sinPhi * ry * cosTheta2);
+        const dy2 = t * (sinPhi * rx * sinTheta2 - cosPhi * ry * cosTheta2);
+
+        curves.push({
+            type: 'C',
+            cp1: { x: startX + dx1, y: startY + dy1 },
+            cp2: { x: epx + dx2, y: epy + dy2 },
+            x: epx,
+            y: epy
+        });
+
+        startX = epx;
+        startY = epy;
+    }
+
+    return curves;
 };
 
 export const normalizePath = (commands: Command[]): PathPoint[] => {
@@ -164,13 +277,27 @@ export const normalizePath = (commands: Command[]): PathPoint[] => {
             lastControlY = qCpY;
         } else if (cmd.code === 'A') {
             // Arc to Cubic
-            // For now, fallback to Line to avoid complex math implementation in this step.
-            // TODO: Implement proper Arc to Cubic conversion
-            result.push({ type: 'L', x: cmd.x, y: cmd.y });
+            const curves = arcToCubic(
+                lastX, lastY,
+                cmd.rx, cmd.ry,
+                cmd.xAxisRotation,
+                cmd.largeArc ? 1 : 0,
+                cmd.sweep ? 1 : 0,
+                cmd.x, cmd.y
+            );
+            result.push(...curves);
+            
             lastX = cmd.x;
             lastY = cmd.y;
-            lastControlX = cmd.x;
-            lastControlY = cmd.y;
+            
+            if (curves.length > 0) {
+                const lastCurve = curves[curves.length - 1];
+                lastControlX = lastCurve.cp2!.x;
+                lastControlY = lastCurve.cp2!.y;
+            } else {
+                lastControlX = cmd.x;
+                lastControlY = cmd.y;
+            }
         } else if (cmd.code === 'Z') {
             result.push({ type: 'Z' });
             // Z doesn't change point, but usually goes back to start of subpath.
@@ -184,3 +311,5 @@ export const normalizePath = (commands: Command[]): PathPoint[] => {
     
     return result;
 };
+
+

@@ -1,4 +1,7 @@
 import './globals.css'
+import { Inter } from 'next/font/google'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'X-IDE - Design Tool v2.0',
@@ -12,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-[#0f0f0f] text-white h-screen w-screen overflow-hidden">{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   )
 }

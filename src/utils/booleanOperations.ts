@@ -1,5 +1,69 @@
+
+import { Shape } from '../types/shapes';
+
 let paper: any;
 let isInitialized = false;
+
+// Worker Management
+class WorkerManager {
+    private worker: Worker | null = null;
+    private workerReady: boolean = false;
+    private pendingMessages: Map<string, { resolve: (value: any) => void, reject: (reason: any) => void }> = new Map();
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            try {
+                this.worker = new Worker('/vectorWorker.js');
+                this.worker.onmessage = this.handleMessage.bind(this);
+                this.worker.onerror = (e) => {
+                    console.warn('Worker error, will use main thread:', e);
+                    this.worker = null;
+                    this.workerReady = false;
+                };
+                this.workerReady = true;
+            } catch (e) {
+                console.warn('Worker not available, will use main thread for boolean operations:', e);
+                this.worker = null;
+                this.workerReady = false;
+            }
+        }
+    }
+
+    private handleMessage(event: MessageEvent) {
+        const { id, success, result, error } = event.data;
+        if (this.pendingMessages.has(id)) {
+            const { resolve, reject } = this.pendingMessages.get(id)!;
+            if (success) {
+                resolve(result);
+            } else {
+                reject(new Error(error));
+            }
+            this.pendingMessages.delete(id);
+        }
+    }
+
+    public isAvailable(): boolean {
+        return this.worker !== null && this.workerReady;
+    }
+
+    public execute(type: string, payload: any): Promise<any> {
+        if (!this.worker || !this.workerReady) {
+            return Promise.reject(new Error('Worker not available'));
+        }
+        const id = `${Date.now()}-${Math.random()}`;
+        return new Promise((resolve, reject) => {
+            this.pendingMessages.set(id, { resolve, reject });
+            try {
+                this.worker!.postMessage({ id, type, payload });
+            } catch (e) {
+                this.pendingMessages.delete(id);
+                reject(e);
+            }
+        });
+    }
+}
+
+const workerManager = new WorkerManager();
 
 const initPaper = () => {
     if (typeof window === 'undefined') return;
@@ -14,27 +78,30 @@ const initPaper = () => {
     }
 };
 
-const createPaperPath = (shape: any): any => {
+const createPaperPath = (shape: Shape): any => {
     if (!paper) return null;
     
     let item: any = null;
     if (shape.type === 'path' && shape.data) {
         item = new paper.Path(shape.data);
     } else if (shape.type === 'rect') {
-        item = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Size(shape.width, shape.height));
+        item = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Size((shape as any).width, (shape as any).height));
     } else if (shape.type === 'circle') {
-        item = new paper.Path.Circle(new paper.Point(shape.radius, shape.radius), shape.radius);
+        item = new paper.Path.Circle(new paper.Point((shape as any).radius, (shape as any).radius), (shape as any).radius);
     }
     
     if (item) {
-         item.position = new paper.Point(shape.x + item.bounds.width/2, shape.y + item.bounds.height/2);
+         // Calculate center based on bounds, not just x/y which might be top-left
+         const width = item.bounds.width;
+         const height = item.bounds.height;
+         item.position = new paper.Point(shape.x + width/2, shape.y + height/2);
          if (shape.rotation) item.rotate(shape.rotation);
     }
     return item;
 };
 
 export const performBooleanOperation = (
-    shapes: any[], 
+    shapes: Shape[], 
     operation: 'unite' | 'subtract' | 'intersect' | 'exclude'
 ): { data: string, x: number, y: number, width: number, height: number } | null => {
     initPaper();
@@ -132,4 +199,59 @@ export const getShapePathData = (shape: any, relativeTo?: {x: number, y: number}
     const data = item.pathData;
     item.remove();
     return data;
+};
+
+export const performBlobBrush = async (
+    shapes: any[],
+    pathData: string,
+    strokeWidth: number,
+    color: string,
+    selectedIds: string[]
+): Promise<any[] | null> => {
+    try {
+        return await workerManager.execute('blob-brush', {
+            shapes,
+            pathData,
+            strokeWidth,
+            color,
+            selectedIds
+        });
+    } catch (error) {
+        console.error('Blob brush error:', error);
+        return null;
+    }
+};
+
+export const performEraser = async (
+    shapes: any[],
+    pathData: string,
+    strokeWidth: number
+): Promise<any[] | null> => {
+    try {
+        return await workerManager.execute('eraser', {
+            shapes,
+            pathData,
+            strokeWidth
+        });
+    } catch (error) {
+        console.error('Eraser error:', error);
+        return null;
+    }
+};
+
+export const performTrim = async (
+    shapes: any[],
+    point: {x: number, y: number},
+    tolerance: number = 5
+): Promise<any[] | null> => {
+    try {
+        return await workerManager.execute('trim', {
+            shapes,
+            point,
+            tolerance
+        });
+    } catch (error) {
+        console.error('Trim error:', error);
+        return null;
+    }
 };

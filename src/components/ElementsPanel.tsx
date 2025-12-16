@@ -43,6 +43,11 @@ const UI_KITS = [
 ];
 
 export function ElementsPanel({ onAddShape }: ElementsPanelProps) {
+    const handleDragStart = (e: React.DragEvent, type: string, data?: any) => {
+        e.dataTransfer.setData('application/x-ide-shape', JSON.stringify({ type, data }));
+        e.dataTransfer.effectAllowed = 'copy';
+    };
+
     return (
         <div className="p-4 space-y-6">
             {/* Basic Shapes */}
@@ -55,6 +60,8 @@ export function ElementsPanel({ onAddShape }: ElementsPanelProps) {
                             onClick={() => onAddShape(shape.type, shape.data)}
                             className="flex flex-col items-center justify-center p-2 bg-[#1e1e1e] hover:bg-[#2a2a2a] rounded border border-transparent hover:border-gray-600 transition-all group"
                             title={shape.label}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, shape.type, shape.data)}
                         >
                             <shape.icon size={24} className="text-gray-400 group-hover:text-white mb-1" />
                             <span className="text-[10px] text-gray-500 group-hover:text-gray-300">{shape.label}</span>
@@ -73,6 +80,8 @@ export function ElementsPanel({ onAddShape }: ElementsPanelProps) {
                             onClick={() => onAddShape(item.type)}
                             className="flex flex-col items-center justify-center p-2 bg-[#1e1e1e] hover:bg-[#2a2a2a] rounded border border-transparent hover:border-gray-600 transition-all group"
                             title={item.label}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, item.type)}
                         >
                             <item.icon size={24} className="text-gray-400 group-hover:text-white mb-1" />
                             <span className="text-[10px] text-gray-500 group-hover:text-gray-300">{item.label}</span>
@@ -91,6 +100,8 @@ export function ElementsPanel({ onAddShape }: ElementsPanelProps) {
                             onClick={() => onAddShape('icon', icon.data)}
                             className="flex flex-col items-center justify-center p-2 bg-[#1e1e1e] hover:bg-[#2a2a2a] rounded border border-transparent hover:border-gray-600 transition-all group"
                             title={icon.label}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'icon', icon.data)}
                         >
                             <icon.icon size={20} className="text-gray-400 group-hover:text-white" />
                         </button>

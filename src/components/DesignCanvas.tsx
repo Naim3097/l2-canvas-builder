@@ -76,7 +76,6 @@ const ShapeRenderer = ({
     const handleInteraction = () => {
         if (shape.interaction?.type === 'navigate' && shape.interaction.targetId) {
             // In a real app, this would change the route or scroll
-            console.log(`[Interaction] Navigating to ${shape.interaction.targetId} with transition ${shape.interaction.transition}`);
             const target = document.getElementById(shape.interaction.targetId); // Fallback for demo
             if (target) target.scrollIntoView({ behavior: 'smooth' });
             else alert(`Navigate to Artboard: ${shape.interaction.targetId}`);
@@ -130,6 +129,9 @@ const ShapeRenderer = ({
                 updates.height = Math.max(5, height * scaleY);
             } else if (shape.type === 'text') {
                 updates.width = Math.max(5, (node as any).width() * scaleX);
+            } else if (shape.type === 'path') {
+                updates.scaleX = (shape.scaleX || 1) * scaleX;
+                updates.scaleY = (shape.scaleY || 1) * scaleY;
             }
             
             onChange({ ...shape, ...updates });

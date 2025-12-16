@@ -1,9 +1,9 @@
 import React from 'react';
-import { MousePointer2, MousePointer, Undo, Redo, Group as GroupIcon, Ungroup as UngroupIcon, Layout, Combine, Scissors, Divide, Type, FilePlus, Merge, PanelLeftClose, PanelRightClose, Eye, Maximize } from 'lucide-react';
+import { MousePointer2, MousePointer, Undo, Redo, Group as GroupIcon, Ungroup as UngroupIcon, Layout, Combine, Scissors, Divide, Type, FilePlus, Merge, PanelLeftClose, PanelRightClose, Eye, Maximize, Pencil, Brush, Eraser } from 'lucide-react';
 
 interface ToolbarProps {
-    activeTool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder';
-    setActiveTool: (tool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder') => void;
+    activeTool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder' | 'pencil' | 'brush' | 'eraser';
+    setActiveTool: (tool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder' | 'pencil' | 'brush' | 'eraser') => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
@@ -65,7 +65,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <button onClick={() => setActiveTool('artboard')} title="Artboard (Shift+O)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'artboard' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}>Artboard</button>
             <button onClick={() => setActiveTool('text')} title="Text (T)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'text' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}>Text</button>
             <button onClick={() => setActiveTool('type-on-path')} title="Type on Path" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'type-on-path' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}><Type size={16} className="rotate-90" /></button>
+            <div className="w-px bg-gray-700 h-6 mx-1"></div>
             <button onClick={() => setActiveTool('pen')} title="Pen (P)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'pen' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}>Pen</button>
+            <button onClick={() => setActiveTool('pencil')} title="Pencil (N)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'pencil' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}><Pencil size={16} /></button>
+            <button onClick={() => setActiveTool('brush')} title="Blob Brush (Shift+B)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'brush' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}><Brush size={16} /></button>
+            <button onClick={() => setActiveTool('eraser')} title="Eraser (Shift+E)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'eraser' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}><Eraser size={16} /></button>
+            <div className="w-px bg-gray-700 h-6 mx-1"></div>
             <button onClick={() => setActiveTool('shape-builder')} title="Shape Builder (Shift+M)" className={`px-3 py-1 rounded text-sm transition ${activeTool === 'shape-builder' ? 'bg-blue-600' : 'hover:bg-[#3a3a3a]'}`}><Merge size={16} /></button>
           </div>
           <div className="text-xs text-gray-500 flex items-center gap-2">

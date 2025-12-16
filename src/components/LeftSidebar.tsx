@@ -11,8 +11,11 @@ interface LeftSidebarProps {
     onSelectionChange: (ids: string[]) => void;
     assets: string[];
     onAddAsset: (src: string) => void;
-    onAddImageToCanvas: (src: string, width: number, height: number) => void;
+    onRemoveAsset: (src: string) => void;
+    onAddImageToCanvas: (src: string, width: number, height: number, x?: number, y?: number) => void;
     onAddShape: (type: string, data?: any) => void;
+    onDeleteShape: (id: string) => void;
+    onContextMenuAction: (action: string) => void;
 }
 
 export default function LeftSidebar({ 
@@ -22,8 +25,11 @@ export default function LeftSidebar({
     onSelectionChange,
     assets,
     onAddAsset,
+    onRemoveAsset,
     onAddImageToCanvas,
-    onAddShape
+    onAddShape,
+    onDeleteShape,
+    onContextMenuAction
 }: LeftSidebarProps) {
     const [activeTab, setActiveTab] = useState<'layers' | 'assets' | 'elements'>('layers');
 
@@ -42,6 +48,8 @@ export default function LeftSidebar({
                   onShapesChange={onShapesChange}
                   selectedIds={selectedIds} 
                   onSelectionChange={onSelectionChange}
+                  onDelete={onDeleteShape}
+                  onContextMenuAction={onContextMenuAction}
                 />
             )}
             {activeTab === 'elements' && (
@@ -51,6 +59,7 @@ export default function LeftSidebar({
                 <AssetsPanel 
                     assets={assets}
                     onAddAsset={onAddAsset}
+                    onRemoveAsset={onRemoveAsset}
                     onAddImageToCanvas={onAddImageToCanvas}
                 />
             )}

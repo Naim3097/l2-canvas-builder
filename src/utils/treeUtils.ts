@@ -155,6 +155,11 @@ export const updateShapeInTree = (shapes: Shape[], id: string, updates: Partial<
             const newChildren = updateShapeInTree(shape.children, id, updates);
             let newShape = { ...shape, children: newChildren } as Shape;
              if (newShape.type === 'group' && (newShape as any).layoutMode && (newShape as any).layoutMode !== 'none') {
+                 // Only apply auto-layout if the update wasn't a direct manipulation of a child's position
+                 // that would conflict. But since we don't know the intent here, we enforce layout.
+                 // To fix "fighting", we would need to detect if 'updates' contains x/y and if so,
+                 // perhaps disable auto-layout or reorder children.
+                 // For now, we enforce layout to ensure consistency.
                  newShape = applyAutoLayout(newShape as GroupShape);
             }
             return newShape;
@@ -294,7 +299,14 @@ export const updateShapeInTreeMutable = (shapes: Shape[], id: string, updates: P
             return true;
         }
         if ((shape.type === 'group' || shape.type === 'artboard') && shape.children) {
-            if (updateShapeInTreeMutable(shape.children, id, updates)) return true;
+            if (updateShapeInTreeMutable(shape.children, id, updates)) {
+                // Child updated. If we are an auto-layout group, re-layout.
+                if (shape.type === 'group' && (shape as any).layoutMode && (shape as any).layoutMode !== 'none') {
+                    const layouted = applyAutoLayout(shape as GroupShape);
+                    Object.assign(shape, layouted);
+                }
+                return true;
+            }
         }
     }
     return false;
@@ -336,4 +348,16 @@ export const moveShapeInTreeMutable = (shapes: Shape[], id: string, direction: '
     }
     return false;
 };
+
+export const getPathToNode = (shapes: Shape[], targetId: string, path: string[] = []): string[] | null => {
+    for (const shape of shapes) {
+        if (shape.id === targetId) return [...path, shape.id];
+        if ((shape.type === 'group' || shape.type === 'artboard') && shape.children) {
+            const result = getPathToNode(shape.children, targetId, [...path, shape.id]);
+            if (result) return result;
+        }
+    }
+    return null;
+};
+
 

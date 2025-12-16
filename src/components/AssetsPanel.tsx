@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 
 interface AssetsPanelProps {
     assets: string[];
     onAddAsset: (src: string) => void;
-    onAddImageToCanvas: (src: string, width: number, height: number) => void;
+    onRemoveAsset: (src: string) => void;
+    onAddImageToCanvas: (src: string, width: number, height: number, x?: number, y?: number) => void;
 }
 
-export default function AssetsPanel({ assets, onAddAsset, onAddImageToCanvas }: AssetsPanelProps) {
+export default function AssetsPanel({ assets, onAddAsset, onRemoveAsset, onAddImageToCanvas }: AssetsPanelProps) {
     const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,13 +56,17 @@ export default function AssetsPanel({ assets, onAddAsset, onAddImageToCanvas }: 
             img.src = src;
             img.onload = () => {
                 // Offset slightly so they don't stack perfectly
-                // We can't easily pass offset here without changing onAddImageToCanvas signature or logic
-                // But onAddImageToCanvas likely puts it at a default position.
-                // Let's just add them.
-                onAddImageToCanvas(src, img.width, img.height);
+                const offset = index * 20;
+                onAddImageToCanvas(src, img.width, img.height, 100 + offset, 100 + offset);
             };
         });
         setSelectedAssets([]);
+    };
+
+    const handleDragStart = (e: React.DragEvent, src: string) => {
+        e.dataTransfer.setData('application/x-ide-asset', src);
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', src);
     };
 
     return (
@@ -83,11 +89,27 @@ export default function AssetsPanel({ assets, onAddAsset, onAddImageToCanvas }: 
                 {assets.map((src, i) => (
                     <div 
                         key={i} 
-                        className={`aspect-square bg-[#2d2d2d] rounded overflow-hidden cursor-pointer ${selectedAssets.includes(src) ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-gray-600'}`}
+                        className={`group relative aspect-square bg-[#2d2d2d] rounded overflow-hidden cursor-pointer ${selectedAssets.includes(src) ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-gray-600'}`}
                         onClick={(e) => handleAssetClick(src, e)}
                         onDoubleClick={() => handleAssetDoubleClick(src)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, src)}
                     >
                         <img src={src} className="w-full h-full object-cover" />
+                        
+                        {/* Overlay with Remove Button */}
+                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveAsset(src);
+                                }}
+                                className="bg-black/50 hover:bg-red-500 text-white p-1 rounded-full backdrop-blur-sm"
+                                title="Remove Asset"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { produce, applyPatches, Patch, enablePatches } from 'immer';
 import { Shape, GroupShape } from '../types/shapes';
 import { 
@@ -16,6 +16,7 @@ import {
 } from '../utils/treeUtils';
 import { performBooleanOperation, createCompoundPath, getShapePathData } from '../utils/booleanOperations';
 import { traceImage, extractPathFromSVG } from '@/utils/imageTracer';
+import { generateUUID } from '../utils/idGenerator';
 
 enablePatches();
 
@@ -39,13 +40,39 @@ export const useEditorState = () => {
     const [clipboard, setClipboard] = useState<Shape[]>([]);
     
     const [history, setHistory] = useState<{
-        past: { patches: Patch[], inversePatches: Patch[] }[], 
-        future: { patches: Patch[], inversePatches: Patch[] }[]
+        past: { patches: Patch[], inversePatches: Patch[], beforeState?: EditorState, afterState?: EditorState }[], 
+        future: { patches: Patch[], inversePatches: Patch[], beforeState?: EditorState, afterState?: EditorState }[]
     }>({ past: [], future: [] });
     
     const [viewMode, setViewMode] = useState<'rgb' | 'cmyk' | 'outline'>('rgb');
     const [globalEditMode, setGlobalEditMode] = useState(false);
     const [documentId, setDocumentId] = useState<string>('doc-1');
+
+    // Persistence
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('x-ide-state');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.shapes) {
+                        setState(prev => ({ ...prev, shapes: parsed.shapes, components: parsed.components || {} }));
+                    }
+                } catch (e) {
+                    console.error('Failed to load state', e);
+                }
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const timer = setTimeout(() => {
+                localStorage.setItem('x-ide-state', JSON.stringify(state));
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [state]);
 
     const clearHistory = useCallback(() => {
         setHistory({ past: [], future: [] });
@@ -62,8 +89,15 @@ export const useEditorState = () => {
             });
 
             if (recordHistory && patches.length > 0) {
+                // Store the complete before/after states instead of just patches
+                // This is more reliable than trying to apply patches
                 setHistory(prev => ({
-                    past: [...prev.past, { patches, inversePatches }],
+                    past: [...prev.past, { 
+                        patches, 
+                        inversePatches,
+                        beforeState: currentState,
+                        afterState: nextState
+                    }],
                     future: []
                 }));
             }
@@ -77,70 +111,124 @@ export const useEditorState = () => {
     }, []);
 
     const undo = useCallback(() => {
-        if (history.past.length === 0) return;
-        const lastChange = history.past[history.past.length - 1];
-        
-        setState(prev => applyPatches(prev, lastChange.inversePatches));
-        
-        setHistory(prev => ({
-            past: prev.past.slice(0, -1),
-            future: [lastChange, ...prev.future]
-        }));
-    }, [history]);
+        setHistory(prev => {
+            if (prev.past.length === 0) {
+                console.log('Nothing to undo');
+                return prev;
+            }
+            
+            const lastChange = prev.past[prev.past.length - 1];
+            console.log('Undoing change, history:', prev.past.length - 1, 'remaining');
+            
+            // Use the stored beforeState which is guaranteed to be correct
+            if (lastChange.beforeState) {
+                console.log('Restoring beforeState');
+                setState(lastChange.beforeState);
+            } else {
+                // Fallback: try to apply inverse patches if beforeState not available
+                console.log('Applying inverse patches (fallback)');
+                setState(currentState => applyPatches(currentState, lastChange.inversePatches));
+            }
+            
+            return {
+                past: prev.past.slice(0, -1),
+                future: [lastChange, ...prev.future]
+            };
+        });
+    }, []);
 
     const redo = useCallback(() => {
-        if (history.future.length === 0) return;
-        const nextChange = history.future[0];
-        
-        setState(prev => applyPatches(prev, nextChange.patches));
-        
-        setHistory(prev => ({
-            past: [...prev.past, nextChange],
-            future: prev.future.slice(1)
-        }));
-    }, [history]);
+        setHistory(prev => {
+            if (prev.future.length === 0) {
+                console.log('Nothing to redo');
+                return prev;
+            }
+            
+            const nextChange = prev.future[0];
+            console.log('Redoing change, history:', prev.past.length + 1, 'total');
+            
+            // Use the stored afterState which is guaranteed to be correct
+            if (nextChange.afterState) {
+                console.log('Restoring afterState');
+                setState(nextChange.afterState);
+            } else {
+                // Fallback: try to apply patches if afterState not available
+                console.log('Applying patches (fallback)');
+                setState(currentState => applyPatches(currentState, nextChange.patches));
+            }
+            
+            return {
+                past: [...prev.past, nextChange],
+                future: prev.future.slice(1)
+            };
+        });
+    }, []);
+
+    // Keyboard shortcuts for undo/redo (after undo/redo are defined)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+            const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+            
+            if (ctrlOrCmd && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if ((ctrlOrCmd && e.key === 'z' && e.shiftKey) || (ctrlOrCmd && e.key === 'y')) {
+                e.preventDefault();
+                redo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo]);
 
     const bringToFront = useCallback(() => {
         if (selectedIds.length === 0) return;
         performUpdate(draft => {
-            // Simple implementation: Top-level only for now
-            const moving: Shape[] = [];
-            draft.shapes = draft.shapes.filter(s => {
-                if (selectedIds.includes(s.id)) {
-                    moving.push(s);
-                    return false;
-                }
-                return true;
+            selectedIds.forEach(id => {
+                moveShapeInTreeMutable(draft.shapes, id, 'top');
             });
-            draft.shapes.push(...moving);
         }, true);
     }, [selectedIds, performUpdate]);
 
     const sendToBack = useCallback(() => {
         if (selectedIds.length === 0) return;
         performUpdate(draft => {
-            // Simple implementation: Top-level only for now
-            const moving: Shape[] = [];
-            draft.shapes = draft.shapes.filter(s => {
-                if (selectedIds.includes(s.id)) {
-                    moving.push(s);
-                    return false;
-                }
-                return true;
+            selectedIds.forEach(id => {
+                moveShapeInTreeMutable(draft.shapes, id, 'bottom');
             });
-            draft.shapes.unshift(...moving);
+        }, true);
+    }, [selectedIds, performUpdate]);
+
+    const bringForward = useCallback(() => {
+        if (selectedIds.length === 0) return;
+        performUpdate(draft => {
+            // Reverse to keep relative order when moving multiple
+            [...selectedIds].reverse().forEach(id => {
+                moveShapeInTreeMutable(draft.shapes, id, 'up');
+            });
+        }, true);
+    }, [selectedIds, performUpdate]);
+
+    const sendBackward = useCallback(() => {
+        if (selectedIds.length === 0) return;
+        performUpdate(draft => {
+            selectedIds.forEach(id => {
+                moveShapeInTreeMutable(draft.shapes, id, 'down');
+            });
         }, true);
     }, [selectedIds, performUpdate]);
 
     // Compatibility wrappers
-    const setShapes = useCallback((valueOrUpdater: Shape[] | ((prev: Shape[]) => Shape[])) => {
+    const setShapes = useCallback((valueOrUpdater: Shape[] | ((prev: Shape[]) => Shape[]), recordHistory = false) => {
         performUpdate(draft => {
             if (typeof valueOrUpdater === 'function') {
                 draft.shapes = valueOrUpdater(draft.shapes as Shape[]);
             } else {
                 draft.shapes = valueOrUpdater;
             }
-        }, false);
+        }, recordHistory);
     }, [performUpdate]);
 
     const setComponents = useCallback((valueOrUpdater: Record<string, Shape> | ((prev: Record<string, Shape>) => Record<string, Shape>)) => {
@@ -154,13 +242,24 @@ export const useEditorState = () => {
     }, [performUpdate]);
 
     const updateShape = useCallback((id: string, updates: Partial<Shape>) => {
-        console.log('updateShape called:', id, updates);
         performUpdate(draft => {
             if (globalEditMode) {
                 draft.shapes = updateSimilarShapesInTree(draft.shapes as Shape[], id, updates);
             } else {
                 updateShapeInTreeMutable(draft.shapes, id, updates);
             }
+        }, true);
+    }, [performUpdate, globalEditMode]);
+
+    const updateShapes = useCallback((updatesMap: Record<string, Partial<Shape>>) => {
+        performUpdate(draft => {
+            Object.entries(updatesMap).forEach(([id, updates]) => {
+                if (globalEditMode) {
+                    draft.shapes = updateSimilarShapesInTree(draft.shapes as Shape[], id, updates);
+                } else {
+                    updateShapeInTreeMutable(draft.shapes, id, updates);
+                }
+            });
         }, true);
     }, [performUpdate, globalEditMode]);
 
@@ -186,8 +285,31 @@ export const useEditorState = () => {
         let newGroupId = '';
 
         performUpdate(draft => {
-            const selectedShapes = selectedIds.map(id => findShape(draft.shapes as Shape[], id)).filter(s => s) as Shape[];
-            if (selectedShapes.length === 0) return;
+            // Helper to find shape and its parent list
+            const findShapeAndParent = (currentList: Shape[], id: string): { shape: Shape, parentList: Shape[] } | null => {
+                for (const shape of currentList) {
+                    if (shape.id === id) {
+                        return { shape, parentList: currentList };
+                    }
+                    if ((shape.type === 'group' || shape.type === 'artboard') && shape.children) {
+                        const found = findShapeAndParent(shape.children, id);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            const shapesToGroup: { shape: Shape, parentList: Shape[] }[] = [];
+            selectedIds.forEach(id => {
+                const result = findShapeAndParent(draft.shapes as Shape[], id);
+                if (result) shapesToGroup.push(result);
+            });
+
+            if (shapesToGroup.length === 0) return;
+
+            // Use the parent of the last selected item as the target parent
+            const targetParentList = shapesToGroup[shapesToGroup.length - 1].parentList;
+            const selectedShapes = shapesToGroup.map(s => s.shape);
 
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             selectedShapes.forEach(s => {
@@ -217,10 +339,15 @@ export const useEditorState = () => {
                 name: 'Group'
             };
 
-            selectedIds.forEach(id => {
-                deleteShapeInTreeMutable(draft.shapes, id);
+            // Remove shapes from their respective parents
+            shapesToGroup.forEach(({ shape, parentList }) => {
+                const idx = parentList.findIndex(s => s.id === shape.id);
+                if (idx !== -1) parentList.splice(idx, 1);
             });
-            draft.shapes.push(newGroup);
+
+            // Add new group to the target parent
+            targetParentList.push(newGroup);
+
         }, true);
 
         if (newGroupId) setSelectedIds([newGroupId]);
@@ -263,7 +390,7 @@ export const useEditorState = () => {
 
         performUpdate(draft => {
             clipboard.forEach((clipShape, index) => {
-                const newId = `${clipShape.type}-${Date.now()}-${index}`;
+                const newId = `${clipShape.type}-${generateUUID()}`;
                 const newShape = {
                     ...clipShape,
                     id: newId,
@@ -276,7 +403,7 @@ export const useEditorState = () => {
                      const updateChildrenIds = (items: Shape[]): Shape[] => {
                          return items.map(item => ({
                              ...item,
-                             id: `${item.type}-${Math.random().toString(36).substr(2, 9)}`,
+                             id: `${item.type}-${generateUUID()}`,
                              children: (item.type === 'group' || item.type === 'artboard') && item.children ? updateChildrenIds(item.children) : undefined
                          } as Shape));
                      };
@@ -301,7 +428,7 @@ export const useEditorState = () => {
             const selectedShapes = selectedIds.map(id => findShape(draft.shapes as Shape[], id)).filter(s => s) as Shape[];
             
             const regenerateIds = (s: Shape): Shape => {
-                const newS = { ...s, id: `${s.type}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
+                const newS = { ...s, id: `${s.type}-${generateUUID()}` };
                 if ((newS.type === 'group' || newS.type === 'artboard') && newS.children) {
                     newS.children = newS.children.map(regenerateIds);
                 }
@@ -327,33 +454,40 @@ export const useEditorState = () => {
         setAssets(prev => [...prev, src]);
     }, []);
 
-    const addShape = useCallback((type: string, data?: any) => {
+    const removeAsset = useCallback((src: string) => {
+        setAssets(prev => prev.filter(a => a !== src));
+    }, []);
+
+    const addShape = useCallback((type: string, data?: any, x?: number, y?: number) => {
         let newId = '';
         performUpdate(draft => {
-            const id = `${type}-${Date.now()}`;
+            const id = `${type}-${generateUUID()}`;
             let newShape: Shape;
+            
+            const defaultX = x ?? 100;
+            const defaultY = y ?? 100;
 
             if (type === 'rect') {
                 newShape = {
-                    id, type: 'rect', x: 100, y: 100, width: 100, height: 100, fill: '#cccccc', name: 'Rectangle'
+                    id, type: 'rect', x: defaultX, y: defaultY, width: 100, height: 100, fill: '#cccccc', name: 'Rectangle'
                 };
             } else if (type === 'circle') {
                 newShape = {
-                    id, type: 'circle', x: 150, y: 150, radius: 50, fill: '#cccccc', name: 'Circle'
+                    id, type: 'circle', x: defaultX + 50, y: defaultY + 50, radius: 50, fill: '#cccccc', name: 'Circle'
                 } as any;
             } else if (type === 'path') {
                 newShape = {
-                    id, type: 'path', x: 100, y: 100, width: 100, height: 100, data: data, fill: '#cccccc', name: 'Shape',
+                    id, type: 'path', x: defaultX, y: defaultY, width: 100, height: 100, data: data, fill: '#cccccc', name: 'Shape',
                     stroke: '#000000', strokeWidth: 1
                 };
             } else if (type === 'icon') {
                 newShape = {
-                    id, type: 'path', x: 100, y: 100, width: 40, height: 40, data: data, fill: '#333333', name: 'Icon',
+                    id, type: 'path', x: defaultX, y: defaultY, width: 40, height: 40, data: data, fill: '#333333', name: 'Icon',
                     scaleX: 1, scaleY: 1, stroke: '#000000', strokeWidth: 0
                 };
             } else if (type === 'button') {
                 newShape = {
-                    id, type: 'group', x: 100, y: 100, width: 120, height: 40, name: 'Button',
+                    id, type: 'group', x: defaultX, y: defaultY, width: 120, height: 40, name: 'Button',
                     children: [
                         { id: `${id}-bg`, type: 'rect', x: 0, y: 0, width: 120, height: 40, fill: '#3b82f6', cornerRadius: 6, name: 'Background' } as any,
                         { id: `${id}-text`, type: 'text', x: 0, y: 0, width: 120, height: 40, text: 'Button', fontSize: 14, fill: '#ffffff', align: 'center', verticalAlign: 'middle', name: 'Label' } as any
@@ -361,7 +495,7 @@ export const useEditorState = () => {
                 };
             } else if (type === 'card') {
                 newShape = {
-                    id, type: 'group', x: 100, y: 100, width: 200, height: 250, name: 'Card',
+                    id, type: 'group', x: defaultX, y: defaultY, width: 200, height: 250, name: 'Card',
                     children: [
                         { id: `${id}-bg`, type: 'rect', x: 0, y: 0, width: 200, height: 250, fill: '#ffffff', stroke: '#e5e7eb', strokeWidth: 1, cornerRadius: 8, name: 'Background' } as any,
                         { id: `${id}-img`, type: 'rect', x: 0, y: 0, width: 200, height: 120, fill: '#f3f4f6', cornerRadius: 8, name: 'Image Placeholder' } as any, // Top rounded only ideally
@@ -371,7 +505,7 @@ export const useEditorState = () => {
                 };
             } else if (type === 'input') {
                 newShape = {
-                    id, type: 'group', x: 100, y: 100, width: 200, height: 40, name: 'Input',
+                    id, type: 'group', x: defaultX, y: defaultY, width: 200, height: 40, name: 'Input',
                     children: [
                         { id: `${id}-bg`, type: 'rect', x: 0, y: 0, width: 200, height: 40, fill: '#ffffff', stroke: '#d1d5db', strokeWidth: 1, cornerRadius: 4, name: 'Border' } as any,
                         { id: `${id}-text`, type: 'text', x: 12, y: 10, text: 'Placeholder...', fontSize: 14, fill: '#9ca3af', name: 'Placeholder' } as any
@@ -388,7 +522,17 @@ export const useEditorState = () => {
         if (newId) setSelectedIds([newId]);
     }, [performUpdate]);
 
-    const addOrUpdateImage = useCallback((src: string, width: number, height: number) => {
+    const addOrUpdateImage = useCallback((src: string, width: number, height: number, x?: number, y?: number) => {
+        console.log('[ADD-IMAGE-STATE] Called with src:', src, 'w:', width, 'h:', height, 'x:', x, 'y:', y);
+        
+        // Validate dimensions and coordinates
+        const safeWidth = (width && width > 0 && Number.isFinite(width)) ? width : 100;
+        const safeHeight = (height && height > 0 && Number.isFinite(height)) ? height : 100;
+        const safeX = (x !== undefined && Number.isFinite(x)) ? x : 100;
+        const safeY = (y !== undefined && Number.isFinite(y)) ? y : 100;
+        
+        console.log('[ADD-IMAGE-STATE] Safe values - w:', safeWidth, 'h:', safeHeight, 'x:', safeX, 'y:', safeY);
+
         let newId = '';
         performUpdate(draft => {
             if (selectedIds.length === 1) {
@@ -403,12 +547,12 @@ export const useEditorState = () => {
             }
 
             const newShape: Shape = {
-                id: `image-${Date.now()}`,
+                id: `image-${generateUUID()}`,
                 type: 'image',
-                x: 100,
-                y: 100,
-                width: width > 500 ? 500 : width,
-                height: width > 500 ? (height / width) * 500 : height,
+                x: safeX,
+                y: safeY,
+                width: safeWidth > 500 ? 500 : safeWidth,
+                height: safeWidth > 500 ? (safeHeight / safeWidth) * 500 : safeHeight,
                 src: src,
                 name: 'Image'
             };
@@ -771,7 +915,7 @@ export const useEditorState = () => {
             if (result) {
                 const baseShape = shapesToMerge[0];
                 const mergedShape: Shape = {
-                    id: `path-${Date.now()}`,
+                    id: `path-${generateUUID()}`,
                     type: 'path',
                     x: result.x,
                     y: result.y,
@@ -809,7 +953,7 @@ export const useEditorState = () => {
             if (pathData) {
                 const { width: w, height: h } = getShapeDimensions(shape);
                 const newShape: Shape = {
-                    id: `path-${Date.now()}`,
+                    id: `path-${generateUUID()}`,
                     type: 'path',
                     x: shape.x,
                     y: shape.y,
@@ -854,6 +998,7 @@ export const useEditorState = () => {
         setComponents,
         assets,
         addAsset,
+        removeAsset,
         addOrUpdateImage,
         clipboard,
         history,
@@ -862,6 +1007,7 @@ export const useEditorState = () => {
         bringToFront,
         sendToBack,
         updateShape,
+        updateShapes,
         deleteShape,
         moveShape,
         groupShapes,

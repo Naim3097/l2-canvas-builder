@@ -9,7 +9,7 @@ interface CanvasAreaProps {
     onShapesChange: (shapes: Shape[]) => void;
     selectedIds: string[];
     onSelectionChange: (ids: string[]) => void;
-    activeTool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder';
+    activeTool: 'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder' | 'pencil' | 'brush' | 'eraser';
     exportRequest: { format: 'png' | 'jpg' | 'svg' | 'pdf', scale: number } | null;
     onExportComplete: () => void;
     onMergeShapes?: (ids: string[]) => void;
@@ -19,6 +19,8 @@ interface CanvasAreaProps {
     canGroup?: boolean;
     resetViewTrigger?: number | null;
     resetStateTrigger?: number | null;
+    onAddImageToCanvas?: (src: string, width: number, height: number, x?: number, y?: number) => void;
+    onAddShape?: (type: string, data?: any, x?: number, y?: number) => void;
 }
 
 export default function CanvasArea({
@@ -36,7 +38,9 @@ export default function CanvasArea({
     canUngroup = false,
     canGroup = false,
     resetViewTrigger,
-    resetStateTrigger
+    resetStateTrigger,
+    onAddImageToCanvas,
+    onAddShape
 }: CanvasAreaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -94,6 +98,8 @@ export default function CanvasArea({
             viewMode={viewMode}
             resetViewTrigger={resetViewTrigger}
             resetStateTrigger={resetStateTrigger}
+            onAddImageToCanvas={onAddImageToCanvas}
+            onAddShape={onAddShape}
           />
           
           {contextMenu && (

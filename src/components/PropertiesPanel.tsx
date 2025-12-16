@@ -10,6 +10,7 @@ import {
 import { Shape } from '../types/shapes';
 import { AppearancePanel } from './AppearancePanel';
 import { getShapeDimensions } from '@/utils/treeUtils';
+import { decomposeMatrix, createSkew, createRotation, createScale, createTranslation, multiplyMatrices } from '@/utils/matrixUtils';
 
 // Helper function
 const findShape = (shapes: Shape[], id: string): Shape | null => {
@@ -88,6 +89,50 @@ export function PropertiesPanel({ selectedIds, shapes, onUpdate, onMove, onCreat
 
     const artboards = shapes.filter(s => s.type === 'artboard');
 
+    // Transform Logic
+    let rotation = shape.rotation || 0;
+    let skewX = 0;
+    let skewY = 0;
+    
+    if (shape.transform) {
+        const decomp = decomposeMatrix(shape.transform);
+        rotation = decomp.rotation;
+        skewX = decomp.skewX;
+        skewY = decomp.skewY;
+    }
+
+    const handleTransformChange = (prop: 'rotation' | 'skewX' | 'skewY', value: number) => {
+        let currentX = shape.x;
+        let currentY = shape.y;
+        let currentScaleX = shape.scaleX || 1;
+        let currentScaleY = shape.scaleY || 1;
+        
+        if (shape.transform) {
+            const d = decomposeMatrix(shape.transform);
+            currentX = d.x;
+            currentY = d.y;
+            currentScaleX = d.scaleX;
+            currentScaleY = d.scaleY;
+        }
+        
+        let newRotation = rotation;
+        let newSkewX = skewX;
+        let newSkewY = skewY;
+        
+        if (prop === 'rotation') newRotation = value;
+        if (prop === 'skewX') newSkewX = value;
+        if (prop === 'skewY') newSkewY = value;
+        
+        const T = createTranslation(currentX, currentY);
+        const R = createRotation((newRotation * Math.PI) / 180);
+        const Sk = createSkew((newSkewX * Math.PI) / 180, (newSkewY * Math.PI) / 180);
+        const S = createScale(currentScaleX, currentScaleY);
+        
+        const M = multiplyMatrices(multiplyMatrices(multiplyMatrices(T, R), Sk), S);
+        
+        onUpdate({ transform: M });
+    };
+
     const findParent = (items: Shape[], targetId: string): Shape | null => {
         for (const item of items) {
             if ((item.type === 'group' || item.type === 'artboard') && item.children) {
@@ -99,9 +144,12 @@ export function PropertiesPanel({ selectedIds, shapes, onUpdate, onMove, onCreat
         return null;
     };
 
+    const parent = findParent(shapes, selectedId);
+    const canAlign = !!parent;
+
     const handleAlign = (type: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
-        const parent = findParent(shapes, selectedId);
-        const { width: parentWidth, height: parentHeight } = parent ? getShapeDimensions(parent) : { width: 1920, height: 1080 };
+        if (!parent) return;
+        const { width: parentWidth, height: parentHeight } = getShapeDimensions(parent);
         const { width: myWidth, height: myHeight } = getShapeDimensions(shape);
 
         if (type === 'left') onUpdate({ x: 0 });
@@ -151,13 +199,13 @@ export function PropertiesPanel({ selectedIds, shapes, onUpdate, onMove, onCreat
                 
                 {/* Alignment Tools */}
                 <div className="flex justify-between px-2 flex-wrap gap-1">
-                    <button onClick={() => handleAlign('left')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Left"><AlignStartHorizontal size={16} /></button>
-                    <button onClick={() => handleAlign('center')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Center"><AlignCenterHorizontal size={16} /></button>
-                    <button onClick={() => handleAlign('right')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Right"><AlignEndHorizontal size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('left')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Left"><AlignStartHorizontal size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('center')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Center"><AlignCenterHorizontal size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('right')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Right"><AlignEndHorizontal size={16} /></button>
                     <div className="w-px bg-gray-800 mx-1"></div>
-                    <button onClick={() => handleAlign('top')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Top"><AlignStartVertical size={16} /></button>
-                    <button onClick={() => handleAlign('middle')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Middle"><AlignCenterVertical size={16} /></button>
-                    <button onClick={() => handleAlign('bottom')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Align Bottom"><AlignEndVertical size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('top')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Top"><AlignStartVertical size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('middle')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Middle"><AlignCenterVertical size={16} /></button>
+                    <button disabled={!canAlign} onClick={() => handleAlign('bottom')} className={`p-1 rounded ${!canAlign ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`} title="Align Bottom"><AlignEndVertical size={16} /></button>
                     <div className="w-px bg-gray-800 mx-1"></div>
                     <button onClick={() => onMove('up')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Bring Forward"><ChevronUp size={16} /></button>
                     <button onClick={() => onMove('down')} className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded" title="Send Backward"><ChevronDown size={16} /></button>
@@ -214,18 +262,28 @@ export function PropertiesPanel({ selectedIds, shapes, onUpdate, onMove, onCreat
                         </div>
                     </div>
                 )}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-2">
                      <div className="relative group">
                         <label className="absolute left-2 top-1.5 text-[10px] text-gray-500 group-hover:text-blue-500 cursor-ew-resize">R</label>
-                        <input type="number" value={Math.round(shape.rotation || 0)} onChange={(e) => onUpdate({ rotation: Number(e.target.value) })} className="w-full bg-[#1e1e1e] text-white text-xs pl-6 pr-2 py-1.5 rounded border border-transparent hover:border-gray-700 focus:border-blue-500 outline-none transition-colors" />
+                        <input type="number" value={Math.round(rotation)} onChange={(e) => handleTransformChange('rotation', Number(e.target.value))} className="w-full bg-[#1e1e1e] text-white text-xs pl-6 pr-2 py-1.5 rounded border border-transparent hover:border-gray-700 focus:border-blue-500 outline-none transition-colors" />
                     </div>
-                    {shape.type === 'rect' && (
+                    <div className="relative group">
+                        <label className="absolute left-2 top-1.5 text-[10px] text-gray-500 group-hover:text-blue-500 cursor-ew-resize">SkX</label>
+                        <input type="number" value={Math.round(skewX)} onChange={(e) => handleTransformChange('skewX', Number(e.target.value))} className="w-full bg-[#1e1e1e] text-white text-xs pl-6 pr-2 py-1.5 rounded border border-transparent hover:border-gray-700 focus:border-blue-500 outline-none transition-colors" />
+                    </div>
+                    <div className="relative group">
+                        <label className="absolute left-2 top-1.5 text-[10px] text-gray-500 group-hover:text-blue-500 cursor-ew-resize">SkY</label>
+                        <input type="number" value={Math.round(skewY)} onChange={(e) => handleTransformChange('skewY', Number(e.target.value))} className="w-full bg-[#1e1e1e] text-white text-xs pl-6 pr-2 py-1.5 rounded border border-transparent hover:border-gray-700 focus:border-blue-500 outline-none transition-colors" />
+                    </div>
+                </div>
+                {shape.type === 'rect' && (
+                    <div className="grid grid-cols-1 gap-4 mt-2">
                         <div className="relative group">
                             <label className="absolute left-2 top-1.5 text-[10px] text-gray-500 group-hover:text-blue-500 cursor-ew-resize">C</label>
                             <input type="number" value={(shape as any).cornerRadius || 0} onChange={(e) => onUpdate({ cornerRadius: Number(e.target.value) })} className="w-full bg-[#1e1e1e] text-white text-xs pl-6 pr-2 py-1.5 rounded border border-transparent hover:border-gray-700 focus:border-blue-500 outline-none transition-colors" />
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
                 <div className="grid grid-cols-2 gap-4 mt-4">
                     <button onClick={() => onUpdate({ scaleX: ((shape as any).scaleX ?? 1) * -1 })} className="flex items-center justify-center gap-2 bg-[#1e1e1e] hover:bg-gray-700 text-white text-xs py-1.5 rounded border border-transparent hover:border-gray-600 transition-colors" title="Flip Horizontal">
                         <ArrowLeftRight size={14} /> Flip H

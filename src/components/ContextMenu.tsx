@@ -39,6 +39,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, onActio
                 <span>Paste</span> <span className="text-gray-500 text-xs">Ctrl+V</span>
             </button>
             <div className="h-px bg-gray-700 my-1"></div>
+            <button onClick={() => onAction('group')} disabled={!canGroup} className="w-full text-left px-4 py-1.5 text-sm text-gray-200 hover:bg-blue-600 hover:text-white flex justify-between disabled:opacity-50 disabled:hover:bg-transparent">
+                <span>Group</span> <span className="text-gray-500 text-xs">Ctrl+G</span>
+            </button>
+            <button onClick={() => onAction('ungroup')} disabled={!canUngroup} className="w-full text-left px-4 py-1.5 text-sm text-gray-200 hover:bg-blue-600 hover:text-white flex justify-between disabled:opacity-50 disabled:hover:bg-transparent">
+                <span>Ungroup</span> <span className="text-gray-500 text-xs">Ctrl+Shift+G</span>
+            </button>
+            <div className="h-px bg-gray-700 my-1"></div>
             <button onClick={() => onAction('delete')} className="w-full text-left px-4 py-1.5 text-sm text-gray-200 hover:bg-blue-600 hover:text-white flex justify-between">
                 <span>Delete</span> <span className="text-gray-500 text-xs">Del</span>
             </button>

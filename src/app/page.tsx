@@ -1,256 +1,235 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import LeftSidebar from '@/components/LeftSidebar';
-import CanvasArea from '@/components/CanvasArea';
-import { PropertiesPanel } from '@/components/PropertiesPanel';
-import { Toolbar } from '@/components/Toolbar';
-import { useEditorState } from '@/hooks/useEditorState';
 
-import { NewDocumentModal } from '@/components/NewDocumentModal';
-import { Shape } from '@/types/shapes';
-import { findShape } from '@/utils/treeUtils';
+import React from 'react';
+import Link from 'next/link';
+import { 
+  PenTool, 
+  Layers, 
+  Zap, 
+  Image as ImageIcon, 
+  Type, 
+  Grid, 
+  Download, 
+  Cpu, 
+  MousePointer2, 
+  Scissors,
+  ArrowRight,
+  CheckCircle2
+} from 'lucide-react';
 
-export default function Workspace() {
-  const [activeTool, setActiveTool] = useState<'select' | 'direct-select' | 'rect' | 'pen' | 'text' | 'type-on-path' | 'artboard' | 'shape-builder'>('select');
-  const [exportRequest, setExportRequest] = useState<{ format: 'png' | 'jpg' | 'svg' | 'pdf', scale: number } | null>(null);
-  const [isNewDocModalOpen, setIsNewDocModalOpen] = useState(false);
-  const [resetViewTrigger, setResetViewTrigger] = useState<number | null>(null);
-  const [resetStateTrigger, setResetStateTrigger] = useState<number | null>(null);
-  
-  // UI State
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [previewMode, setPreviewMode] = useState(false);
-
-  const {
-    shapes, setShapes,
-    selectedIds, setSelectedIds,
-    components, setComponents,
-    clipboard,
-    history,
-    undo, redo,
-    bringToFront, sendToBack,
-    updateShape, deleteShape, moveShape,
-    groupShapes, ungroupShapes,
-    copy, paste, duplicate,
-    addToHistory,
-    assets, addAsset, addOrUpdateImage,
-    makeMask, releaseMask, booleanOperation, makeCompoundPath,
-    createComponent, detachInstance, selectSimilar,
-    traceImageSelection,
-    mergeShapes,
-    cropImage,
-    viewMode, setViewMode,
-    globalEditMode, setGlobalEditMode,
-    documentId, setDocumentId, clearHistory,
-    addShape
-  } = useEditorState();
-
-  const handleNewDocument = (width: number, height: number, name: string) => {
-      // Clear canvas and set up new artboard
-      const newArtboard: Shape = {
-          id: `artboard-${Date.now()}`,
-          type: 'artboard',
-          x: 100,
-          y: 100,
-          width: width,
-          height: height,
-          fill: '#ffffff',
-          name: name,
-          children: []
-      };
-      setShapes([newArtboard]);
-      setSelectedIds([]);
-      setDocumentId(`doc-${Date.now()}`);
-      clearHistory();
-      setIsNewDocModalOpen(false);
-  };
-
-
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-        // Ignore shortcuts if user is typing in an input
-        if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
-            return;
-        }
-
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-            if (e.shiftKey) redo(); else undo();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-            redo();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                ungroupShapes();
-            } else {
-                groupShapes();
-            }
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-            e.preventDefault();
-            copy();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-            e.preventDefault();
-            paste();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-            e.preventDefault();
-            duplicate();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === '8') {
-            e.preventDefault();
-            makeCompoundPath();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === '7') {
-            e.preventDefault();
-            makeMask();
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-            if (selectedIds.length > 0) {
-                deleteShape(selectedIds);
-            }
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [history, shapes, selectedIds, clipboard, undo, redo, groupShapes, ungroupShapes, copy, paste, duplicate, deleteShape]);
-
-  const canUngroup = selectedIds.some(id => {
-      const shape = findShape(shapes, id);
-      return shape && shape.type === 'group';
-  });
-
+export default function LandingPage() {
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#121212] text-white overflow-hidden">
-      {/* Top Toolbar */}
-      {!previewMode && (
-      <Toolbar 
-        activeTool={activeTool}
-        setActiveTool={setActiveTool}
-        undo={undo}
-        redo={redo}
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
-        groupShapes={groupShapes}
-        ungroupShapes={ungroupShapes}
-        makeMask={makeMask}
-        booleanOperation={booleanOperation}
-        makeCompoundPath={makeCompoundPath}
-        selectedCount={selectedIds.length}
-        canUngroup={canUngroup}
-        onNewDocument={() => setIsNewDocModalOpen(true)}
-        leftPanelOpen={leftPanelOpen}
-        setLeftPanelOpen={setLeftPanelOpen}
-        rightPanelOpen={rightPanelOpen}
-        setRightPanelOpen={setRightPanelOpen}
-        previewMode={previewMode}
-        setPreviewMode={setPreviewMode}
-        onResetView={() => setResetViewTrigger(Date.now())}
-      />
-      )}
+    <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       
-      {previewMode && (
-          <div className="absolute top-4 right-4 z-50">
-              <button onClick={() => setPreviewMode(false)} className="bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition">Exit Preview</button>
+      {/* Navigation Bar */}
+      <nav className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">X</div>
+            <span className="font-bold text-xl tracking-tight">X-IDE</span>
           </div>
-      )}
+          
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">Features</a>
+            <a href="#roadmap" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">Roadmap</a>
+            <a href="#tech" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">Technology</a>
+          </div>
 
-      <NewDocumentModal 
-        isOpen={isNewDocModalOpen} 
-        onClose={() => setIsNewDocModalOpen(false)} 
-        onCreate={handleNewDocument} 
-      />
-
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Sidebar - Layers */}
-        <div 
-            className={`border-r border-gray-800 bg-[#1a1a1a] transition-all duration-300 ease-in-out overflow-hidden ${leftPanelOpen && !previewMode ? 'w-64 opacity-100' : 'w-0 opacity-0 border-none'}`}
-        >
-            <div className="w-64 h-full">
-                <LeftSidebar 
-                    shapes={shapes}
-                    onShapesChange={setShapes}
-                    selectedIds={selectedIds}
-                    onSelectionChange={setSelectedIds}
-                    assets={assets}
-                    onAddAsset={addAsset}
-                    onAddImageToCanvas={addOrUpdateImage}
-                    onAddShape={addShape}
-                />
-            </div>
-        </div>
-
-        {/* Canvas Center */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0a] p-4 transition-all duration-300">
-            <div className="flex-1 relative rounded-lg overflow-hidden shadow-2xl border border-gray-800/50">
-                <CanvasArea 
-                    key={documentId}
-                    shapes={shapes}
-                    components={components}
-                    onShapesChange={setShapes}
-                    selectedIds={selectedIds}
-                    onSelectionChange={setSelectedIds}
-                    activeTool={activeTool}
-                    exportRequest={exportRequest}
-                    onExportComplete={() => setExportRequest(null)}
-                    onMergeShapes={mergeShapes}
-                    viewMode={viewMode}
-                    resetViewTrigger={resetViewTrigger}
-                    resetStateTrigger={resetStateTrigger}
-                    canUngroup={canUngroup}
-                    canGroup={selectedIds.length > 0}
-                    onContextMenuAction={(action) => {
-                        switch(action) {
-                            case 'cut': copy(); deleteShape(selectedIds); break;
-                            case 'copy': copy(); break;
-                            case 'paste': paste(); break;
-                            case 'delete': deleteShape(selectedIds); break;
-                            case 'group': groupShapes(); break;
-                            case 'ungroup': ungroupShapes(); break;
-                            case 'bringToFront': bringToFront(); break;
-                            case 'sendToBack': sendToBack(); break;
-                        }
-                    }}
-                />
-            </div>
-        </div>
-
-        {/* Right Sidebar - Properties */}
-        <div 
-            className={`border-l border-gray-800 bg-[#0f0f0f] transition-all duration-300 ease-in-out overflow-hidden flex flex-col ${rightPanelOpen && !previewMode ? 'w-80 opacity-100' : 'w-0 opacity-0 border-none'}`}
-        >
-          <div className="w-80 h-full flex flex-col">
-            <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300">Properties</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-                <PropertiesPanel 
-                    selectedIds={selectedIds} 
-                    shapes={shapes} 
-                    onUpdate={(updates) => {
-                        selectedIds.forEach(id => updateShape(id, updates));
-                    }}
-                    onMove={(direction) => {
-                        selectedIds.forEach(id => moveShape(id, direction));
-                    }}
-                    onCreateComponent={createComponent}
-                    onDetachInstance={detachInstance}
-                    onExport={(format, scale) => setExportRequest({ format, scale })}
-                    onSelectSimilar={selectSimilar}
-                    onTraceImage={traceImageSelection}
-                    onReleaseMask={releaseMask}
-                    onCropImage={cropImage}
-                    viewMode={viewMode}
-                    setViewMode={setViewMode}
-                    globalEditMode={globalEditMode}
-                    setGlobalEditMode={setGlobalEditMode}
-                />
-            </div>
+          <div className="flex items-center gap-4">
+            <Link href="/editor">
+              <button className="bg-slate-900 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm flex items-center gap-2">
+                Launch Editor <ArrowRight size={16} />
+              </button>
+            </Link>
           </div>
         </div>
-      </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium mb-8 border border-blue-100">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            v0.1 Public Preview
+          </div>
+          
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-8 text-slate-900">
+            The Next-Gen <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">AI Design IDE</span>
+          </h1>
+          
+          <p className="text-xl text-slate-600 leading-relaxed mb-10 max-w-2xl mx-auto">
+            A professional-grade vector graphics editor built for the web. 
+            Featuring advanced path editing, boolean operations, and AI-powered tools.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href="/editor">
+              <button className="h-12 px-8 rounded bg-slate-900 text-white font-semibold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2">
+                Start Designing
+              </button>
+            </Link>
+            <a href="#features">
+              <button className="h-12 px-8 rounded border border-slate-200 text-slate-700 font-semibold text-lg hover:bg-slate-50 transition-all">
+                Explore Features
+              </button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* App Preview / Hero Image Placeholder */}
+      <section className="px-6 pb-24">
+        <div className="max-w-6xl mx-auto rounded-xl border border-slate-200 shadow-2xl overflow-hidden bg-slate-50 aspect-[16/9] relative group">
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-100/50">
+            <p className="text-slate-400 font-medium">Interactive Workspace Preview</p>
+          </div>
+          {/* In a real scenario, put a screenshot or iframe of the editor here */}
+          <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent pointer-events-none"></div>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section id="features" className="py-24 bg-slate-50 border-t border-slate-200">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Professional Vector Tools</h2>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Built to match industry standards with a focus on performance and precision.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <FeatureCard 
+              icon={<PenTool />}
+              title="Advanced Pen Tool"
+              description="Cubic Bezier engine with precise handle controls for creating complex vector shapes."
+            />
+            <FeatureCard 
+              icon={<Zap />}
+              title="Boolean Operations"
+              description="Non-destructive Union, Subtract, Intersect, and Exclude operations powered by Paper.js."
+            />
+            <FeatureCard 
+              icon={<Layers />}
+              title="Artboards & Layers"
+              description="Multi-artboard support with a comprehensive layer tree for organizing complex projects."
+            />
+            <FeatureCard 
+              icon={<MousePointer2 />}
+              title="Smart Guides"
+              description="Intelligent snapping engine for precise alignment and spacing distribution."
+            />
+            <FeatureCard 
+              icon={<Type />}
+              title="Typography"
+              description="Advanced text support including Type on Path, kerning, and Google Fonts integration."
+            />
+            <FeatureCard 
+              icon={<ImageIcon />}
+              title="Image Trace"
+              description="Convert raster images to editable vector paths instantly with our tracing engine."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Roadmap Section */}
+      <section id="roadmap" className="py-24 px-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Roadmap to Premium</h2>
+            <p className="text-lg text-slate-600">
+              We are actively developing the next generation of vector graphics technology.
+            </p>
+          </div>
+
+          <div className="space-y-8">
+            <RoadmapItem 
+              title="Robust Vector Engine"
+              status="In Progress"
+              description="Implementing a spec-compliant SVG path parser to support all path commands (M, L, H, V, C, S, Q, T, A, Z)."
+            />
+            <RoadmapItem 
+              title="Matrix-Based Transform System"
+              status="Planned"
+              description="Adopting a 2x3 Affine Transformation Matrix model for complex skewing and shearing operations."
+            />
+            <RoadmapItem 
+              title="Delta-Based History"
+              status="Planned"
+              description="Optimizing memory usage by tracking state changes (patches) instead of full snapshots."
+            />
+            <RoadmapItem 
+              title="Spatial Indexing"
+              status="Planned"
+              description="Implementing Quadtree spatial indexing for high-performance rendering of thousands of objects."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 bg-slate-900 text-white">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to create?</h2>
+          <p className="text-slate-300 text-lg mb-10 max-w-2xl mx-auto">
+            Join the future of design with X-IDE. Open source, powerful, and built for the web.
+          </p>
+          <Link href="/editor">
+            <button className="h-14 px-10 rounded bg-white text-slate-900 font-bold text-lg hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+              Launch X-IDE Now
+            </button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-50 border-t border-slate-200 py-12 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center text-white text-xs font-bold">X</div>
+            <span className="font-bold text-slate-900">X-IDE</span>
+          </div>
+          <div className="text-slate-500 text-sm">
+            © 2025 X-IDE Project. All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
+function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
+  return (
+    <div className="bg-white p-8 rounded-lg border border-slate-200 hover:border-blue-200 hover:shadow-lg transition-all group">
+      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform text-blue-600">
+        {icon}
+      </div>
+      <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
+      <p className="text-slate-600 leading-relaxed">{description}</p>
+    </div>
+  );
+}
 
-
-
-
+function RoadmapItem({ title, status, description }: { title: string, status: string, description: string }) {
+  return (
+    <div className="flex gap-4 items-start p-6 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all">
+      <div className="mt-1 text-blue-600">
+        <CheckCircle2 size={24} />
+      </div>
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <span className="text-xs font-semibold px-2 py-1 rounded bg-slate-100 text-slate-600 uppercase tracking-wide">
+            {status}
+          </span>
+        </div>
+        <p className="text-slate-600">{description}</p>
+      </div>
+    </div>
+  );
+}
