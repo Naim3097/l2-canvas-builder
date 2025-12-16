@@ -22,7 +22,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       
       {/* Navigation Bar */}
-      <nav className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+      <nav className="border-b border-slate-200 bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">X</div>
@@ -83,12 +83,11 @@ export default function LandingPage() {
 
       {/* App Preview / Hero Image Placeholder */}
       <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto rounded-xl border border-slate-200 shadow-2xl overflow-hidden bg-slate-50 aspect-[16/9] relative group">
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-100/50">
+        <div className="max-w-6xl mx-auto rounded-xl border border-slate-200 shadow-2xl overflow-hidden bg-slate-100 aspect-[16/9] relative group">
+          <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-slate-400 font-medium">Interactive Workspace Preview</p>
           </div>
           {/* In a real scenario, put a screenshot or iframe of the editor here */}
-          <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent pointer-events-none"></div>
         </div>
       </section>
 
