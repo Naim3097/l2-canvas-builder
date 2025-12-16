@@ -22,7 +22,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       
       {/* Navigation Bar */}
-      <nav className="border-b border-slate-200 bg-white sticky top-0 z-50">
+      <nav className="bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">X</div>
@@ -68,7 +68,7 @@ export default function LandingPage() {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/editor">
-              <button className="h-12 px-8 rounded bg-slate-900 text-white font-semibold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2">
+              <button className="h-12 px-8 rounded bg-slate-900 text-white font-semibold text-lg hover:bg-slate-800 transition-all flex items-center gap-2">
                 Start Designing
               </button>
             </Link>
@@ -83,7 +83,7 @@ export default function LandingPage() {
 
       {/* App Preview / Hero Image Placeholder */}
       <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto rounded-xl border border-slate-200 shadow-2xl overflow-hidden bg-slate-100 aspect-[16/9] relative group">
+        <div className="max-w-6xl mx-auto rounded-xl overflow-hidden bg-slate-100 aspect-[16/9] relative group">
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-slate-400 font-medium">Interactive Workspace Preview</p>
           </div>
@@ -179,7 +179,7 @@ export default function LandingPage() {
             Join the future of design with X-IDE. Open source, powerful, and built for the web.
           </p>
           <Link href="/editor">
-            <button className="h-14 px-10 rounded bg-white text-slate-900 font-bold text-lg hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+            <button className="h-14 px-10 rounded bg-white text-slate-900 font-bold text-lg hover:bg-blue-50 transition-all">
               Launch X-IDE Now
             </button>
           </Link>
