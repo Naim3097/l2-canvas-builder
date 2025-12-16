@@ -12,6 +12,21 @@ body {
   /* Default body styles */
 }
 
+/* Prevent section borders in screenshots/print */
+@media print, screen {
+  section {
+    border: none !important;
+    box-shadow: none !important;
+    page-break-inside: auto;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}
+
 /* Custom Scrollbar for panels */
 ::-webkit-scrollbar {
   width: 8px;
